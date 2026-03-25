@@ -4,4 +4,3 @@ collections:
     source: https://github.com/ansible-collections/cloud.terraform.git
     type: git
     version: stable-statefile-inventory
-  - name: google.cloud
