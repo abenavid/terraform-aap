@@ -1,0 +1,12 @@
+---
+# Copy to deploy_vars.yml (gitignored) and fill in.
+
+# Prefix for the state bucket; Terraform adds a random suffix (avoids S3 name collisions).
+TF_STATE_BUCKET: ""
+TF_STATE_KEY: terraform/terraform.tfstate
+AWS_REGION: us-east-1
+TF_S3_BACKEND_REGION: ""
+
+AWS_ACCESS_KEY_ID: ""
+AWS_SECRET_ACCESS_KEY: ""
+TERRAFORM_BINARY: ""

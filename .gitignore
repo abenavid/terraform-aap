@@ -1,8 +1,13 @@
 execution-environment/context
+context/
 .terraform
-.terraform.*
+*.tfstate
+*.tfstate.*
 .DS_Store
 .env
+deploy_vars.yml
 terraform.tfvars
 terraform.tfvars.json
 s3-backend-credentials
+deploy-artifact*.json
+ansible-navigator.log

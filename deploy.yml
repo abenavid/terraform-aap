@@ -1,14 +1,118 @@
 ---
+# Requires: ansible-galaxy collection install -r ansible-requirements.yml (cloud.terraform)
+# Copy deploy_vars.yml.example to deploy_vars.yml and set values.
+#
+# Terraform uses local state first (terraform/terraform.tfstate). The same apply creates the S3
+# bucket resource. To move state into S3: edit terraform/main.tf (backend "s3" {}) and run
+# ./terraform/migrate-state-to-s3.sh — see that script and deploy_vars.yml.
+#
+# Run locally:  ansible-playbook deploy.yml
+# Run with EE:  ansible-navigator run deploy.yml -m stdout
+
 - name: Deploy resources via Terraform
   hosts: localhost
+  connection: local
+  gather_facts: false
+  pre_tasks:
+    - name: Check for deploy_vars.yml
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/deploy_vars.yml"
+      register: deploy_vars_file
+
+    - name: Fail if deploy_vars.yml missing
+      ansible.builtin.fail:
+        msg: Copy deploy_vars.yml.example to deploy_vars.yml and fill in values (deploy_vars.yml is gitignored).
+      when: not deploy_vars_file.stat.exists
+
+    - name: Load deploy vars
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/deploy_vars.yml"
+        name: deploy_vars
+
+    - name: Build cfg (environment overrides deploy_vars when set)
+      ansible.builtin.set_fact:
+        cfg:
+          TF_STATE_BUCKET: "{{ lookup('env', 'TF_STATE_BUCKET', default='') | default(deploy_vars.TF_STATE_BUCKET | default(''), true) }}"
+          TF_STATE_KEY: "{{ lookup('env', 'TF_STATE_KEY', default='') | default(deploy_vars.TF_STATE_KEY | default('terraform/terraform.tfstate'), true) }}"
+          AWS_REGION: "{{ lookup('env', 'AWS_REGION', default='') | default(deploy_vars.AWS_REGION | default('us-east-1'), true) }}"
+          TF_S3_BACKEND_REGION: "{{ lookup('env', 'TF_S3_BACKEND_REGION', default='') | default(deploy_vars.TF_S3_BACKEND_REGION | default(''), true) }}"
+          AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID', default='') | default(deploy_vars.AWS_ACCESS_KEY_ID | default(''), true) }}"
+          AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY', default='') | default(deploy_vars.AWS_SECRET_ACCESS_KEY | default(''), true) }}"
+          TERRAFORM_BINARY: "{{ lookup('env', 'TERRAFORM_BINARY', default='') | default(deploy_vars.TERRAFORM_BINARY | default(''), true) }}"
+
+    - name: Fail if TF_STATE_BUCKET is not set
+      ansible.builtin.fail:
+        msg: Set TF_STATE_BUCKET in deploy_vars.yml to a short prefix for the state bucket (Terraform appends a random suffix for global uniqueness).
+      when: (cfg.TF_STATE_BUCKET | default('') | trim | length) == 0
+
+    - name: Fail if TF_S3_BACKEND_REGION is not set
+      ansible.builtin.fail:
+        msg: Set TF_S3_BACKEND_REGION in deploy_vars.yml to the region where the state bucket should live.
+      when: (cfg.TF_S3_BACKEND_REGION | default('') | trim | length) == 0
+
+    - name: Build AWS env for Terraform
+      ansible.builtin.set_fact:
+        tf_aws_env: "{{ {'AWS_REGION': cfg.AWS_REGION | default('us-east-1', true)} }}"
+
+    - name: Add AWS access keys to Terraform env
+      ansible.builtin.set_fact:
+        tf_aws_env: "{{ tf_aws_env | combine({'AWS_ACCESS_KEY_ID': cfg.AWS_ACCESS_KEY_ID, 'AWS_SECRET_ACCESS_KEY': cfg.AWS_SECRET_ACCESS_KEY}) }}"
+      when:
+        - cfg.AWS_ACCESS_KEY_ID | default('') | trim | length > 0
+        - cfg.AWS_SECRET_ACCESS_KEY | default('') | trim | length > 0
+
+    - name: Fail if AWS keys missing
+      ansible.builtin.fail:
+        msg: Set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY in deploy_vars.yml.
+      when:
+        - (not (cfg.AWS_ACCESS_KEY_ID | default('') | trim | length > 0)) or (not (cfg.AWS_SECRET_ACCESS_KEY | default('') | trim | length > 0))
+
+    - name: Resolve terraform binary
+      ansible.builtin.shell: |
+        set -e
+        if [ -n "${TERRAFORM_BINARY:-}" ] && [ -x "${TERRAFORM_BINARY}" ]; then
+          echo "${TERRAFORM_BINARY}"
+          exit 0
+        fi
+        if command -v terraform >/dev/null 2>&1; then
+          command -v terraform
+          exit 0
+        fi
+        for p in /opt/homebrew/bin/terraform /usr/local/bin/terraform; do
+          if [ -x "$p" ]; then
+            echo "$p"
+            exit 0
+          fi
+        done
+        exit 1
+      args:
+        executable: /bin/bash
+      environment:
+        TERRAFORM_BINARY: "{{ cfg.TERRAFORM_BINARY | default('', true) }}"
+      register: tf_which
+      changed_when: false
+      failed_when: false
+
+    - name: Fail if terraform CLI is missing
+      ansible.builtin.fail:
+        msg: >-
+          Terraform was not found. Install it (e.g. brew install terraform) or set TERRAFORM_BINARY
+          in deploy_vars.yml to the full path of the terraform executable.
+      when: tf_which.rc != 0
+
+    - name: Set terraform binary for module
+      ansible.builtin.set_fact:
+        terraform_binary: "{{ tf_which.stdout | trim }}"
+
   tasks:
-    - name: Terraform apply
+    - name: Terraform apply (local backend; creates state bucket + EC2)
       cloud.terraform.terraform:
-        project_path: terraform/
+        binary_path: "{{ terraform_binary }}"
+        project_path: "{{ playbook_dir }}/terraform"
         state: present
         force_init: true
-        backend_config_files:
-          - "{{ lookup('env', 'TF_BACKEND_CONFIG_FILE') }}"
-        # variables:
-        #   gcp_credentials_path: "{{ lookup('env', 'GCE_CREDENTIALS_FILE_PATH') }}"
-        #   gcp_project: "{{ lookup('env', 'GCE_PROJECT') }}"
+        variables:
+          tf_state_bucket_name: "{{ cfg.TF_STATE_BUCKET }}"
+          aws_region: "{{ cfg.AWS_REGION | default('us-east-1', true) }}"
+          s3_state_region: "{{ cfg.TF_S3_BACKEND_REGION }}"
+      environment: "{{ tf_aws_env }}"
