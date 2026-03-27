@@ -1,6 +1,7 @@
 ---
-# Requires: ansible-galaxy collection install -r ansible-requirements.yml (cloud.terraform)
-# Copy deploy_vars.yml.example to deploy_vars.yml and set values.
+# Requires: ansible-galaxy collection install -r ansible-requirements.yml (amazon.aws, community.aws, cloud.terraform)
+# Copy deploy_vars.yml.example to deploy_vars.yml and set values, or run on AAP with a credential
+# that injects TF_STATE_BUCKET, TF_S3_BACKEND_REGION, AWS keys, etc. (environment overrides file).
 #
 # Terraform uses local state first (terraform/terraform.tfstate). The same apply creates the S3
 # bucket resource. To move state into S3: edit terraform/main.tf (backend "s3" {}) and run
@@ -19,15 +20,16 @@
         path: "{{ playbook_dir }}/deploy_vars.yml"
       register: deploy_vars_file
 
-    - name: Fail if deploy_vars.yml missing
-      ansible.builtin.fail:
-        msg: Copy deploy_vars.yml.example to deploy_vars.yml and fill in values (deploy_vars.yml is gitignored).
-      when: not deploy_vars_file.stat.exists
-
-    - name: Load deploy vars
+    - name: Load deploy vars when present
       ansible.builtin.include_vars:
         file: "{{ playbook_dir }}/deploy_vars.yml"
         name: deploy_vars
+      when: deploy_vars_file.stat.exists
+
+    - name: Default deploy vars when file absent (AAP credential-only runs)
+      ansible.builtin.set_fact:
+        deploy_vars: {}
+      when: not deploy_vars_file.stat.exists
 
     - name: Build cfg (environment overrides deploy_vars when set)
       ansible.builtin.set_fact:
@@ -38,16 +40,17 @@
           TF_S3_BACKEND_REGION: "{{ lookup('env', 'TF_S3_BACKEND_REGION', default='') | default(deploy_vars.TF_S3_BACKEND_REGION | default(''), true) }}"
           AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID', default='') | default(deploy_vars.AWS_ACCESS_KEY_ID | default(''), true) }}"
           AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY', default='') | default(deploy_vars.AWS_SECRET_ACCESS_KEY | default(''), true) }}"
+          AWS_SESSION_TOKEN: "{{ lookup('env', 'AWS_SESSION_TOKEN', default='') | default(deploy_vars.AWS_SESSION_TOKEN | default(''), true) }}"
           TERRAFORM_BINARY: "{{ lookup('env', 'TERRAFORM_BINARY', default='') | default(deploy_vars.TERRAFORM_BINARY | default(''), true) }}"
 
     - name: Fail if TF_STATE_BUCKET is not set
       ansible.builtin.fail:
-        msg: Set TF_STATE_BUCKET in deploy_vars.yml to a short prefix for the state bucket (Terraform appends a random suffix for global uniqueness).
+        msg: Set TF_STATE_BUCKET in deploy_vars.yml or inject it via AAP credential (short prefix; Terraform appends a random suffix for global uniqueness).
       when: (cfg.TF_STATE_BUCKET | default('') | trim | length) == 0
 
     - name: Fail if TF_S3_BACKEND_REGION is not set
       ansible.builtin.fail:
-        msg: Set TF_S3_BACKEND_REGION in deploy_vars.yml to the region where the state bucket should live.
+        msg: Set TF_S3_BACKEND_REGION in deploy_vars.yml or inject it via AAP credential (region where the state bucket should live).
       when: (cfg.TF_S3_BACKEND_REGION | default('') | trim | length) == 0
 
     - name: Build AWS env for Terraform
@@ -61,9 +64,14 @@
         - cfg.AWS_ACCESS_KEY_ID | default('') | trim | length > 0
         - cfg.AWS_SECRET_ACCESS_KEY | default('') | trim | length > 0
 
+    - name: Add AWS session token to Terraform env when set
+      ansible.builtin.set_fact:
+        tf_aws_env: "{{ tf_aws_env | combine({'AWS_SESSION_TOKEN': cfg.AWS_SESSION_TOKEN}) }}"
+      when: cfg.AWS_SESSION_TOKEN | default('') | trim | length > 0
+
     - name: Fail if AWS keys missing
       ansible.builtin.fail:
-        msg: Set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY in deploy_vars.yml.
+        msg: Set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY in deploy_vars.yml or inject them via AAP credential.
       when:
         - (not (cfg.AWS_ACCESS_KEY_ID | default('') | trim | length > 0)) or (not (cfg.AWS_SECRET_ACCESS_KEY | default('') | trim | length > 0))
 
