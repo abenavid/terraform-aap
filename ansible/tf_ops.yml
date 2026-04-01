@@ -24,7 +24,7 @@
           Public key only; never commit private keys.
 
     - name: Apply Terraform configuration
-      community.general.terraform:
+      cloud.terraform.terraform:
         project_path: "{{ playbook_dir }}/../terraform"
         state: present
         force_init: true

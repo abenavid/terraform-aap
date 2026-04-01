@@ -2,7 +2,7 @@
 # Tag and push the EE to Private Automation Hub's container registry.
 #
 # Prerequisites:
-#   - Image already built (./build-ee.sh), default local name: terraform-aap-ee:latest
+#   - Image already built (ansible-builder; see execution-environment.yml header), default local: terraform-aap-ee:latest
 #   - In PAH UI, create a container repository under your organization if required
 #   - Hub route must respond (not HTTP 503)
 #
@@ -10,8 +10,9 @@
 #   On AAP, attach a credential that injects AAP_CONTROLLER_URL, AAP_ADMIN_USERNAME,
 #   AAP_ADMIN_PASSWORD (same names as in the job environment).
 #
-#   PAH_REGISTRY       — registry hostname only, e.g. hub-aap.apps.cluster-foo.dynamic.redhatworkshops.io
-#                        If unset, derived from AAP_CONTROLLER_URL (aap-aap → hub-aap).
+#   PAH_REGISTRY       — registry hostname only, e.g. aap-hub-aap.apps.cluster-foo.dynamic.redhatworkshops.io
+#                        If unset, derived from AAP_CONTROLLER_URL (aap-aap → aap-hub-aap).
+#                        Set PAH_REGISTRY explicitly if your Hub route differs (e.g. hub-aap only).
 #   PAH_NAMESPACE      — organization / namespace in Hub (default: ansible)
 #   PAH_IMAGE_NAME     — image short name (default: terraform-aap-ee)
 #   PAH_USERNAME       — default: AAP_ADMIN_USERNAME
@@ -50,7 +51,7 @@ if [[ -z "${PAH_REGISTRY:-}" ]]; then
     echo "Set PAH_REGISTRY or AAP_CONTROLLER_URL (e.g. from AAP credential injector) or AAP_CONTROLLER_URL in ${ENV_FILE:-a dotenv file}" >&2
     exit 1
   fi
-  PAH_REGISTRY="$(printf '%s' "$url" | sed -E 's|^https?://||' | sed 's|/$||' | sed 's/aap-aap/hub-aap/')"
+  PAH_REGISTRY="$(printf '%s' "$url" | sed -E 's|^https?://||' | sed 's|/$||' | sed 's/aap-aap/aap-hub-aap/')"
 fi
 
 if [[ -z "${PAH_USERNAME:-}" ]]; then

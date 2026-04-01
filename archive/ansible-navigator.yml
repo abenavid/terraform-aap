@@ -1,12 +1,12 @@
 ---
 # 1) Build the EE locally:
-#      ./execution-environment/build-ee.sh
+#      ansible-builder (see execution-environment/execution-environment.yml)
 #
 # 2) Run Terraform via Ansible (stdout):
 #      ansible-navigator run ansible/tf_ops.yml -m stdout --pae false \
 #        -e tf_ssh_public_key="$(cat ~/.ssh/id_rsa.pub)"
 #
-# Image tag must match build-ee.sh (default: terraform-aap-ee:latest).
+# Image tag must match your ansible-builder -t (default: terraform-aap-ee:latest).
 
 ansible-navigator:
   ansible:

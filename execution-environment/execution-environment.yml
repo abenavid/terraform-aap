@@ -1,3 +1,14 @@
+# Build from the repository root (default context: ./context). Pin linux/amd64 so AAP
+# workers do not hit "Exec format error" on /opt/builder/bin/entrypoint when you build on arm64.
+#
+#   ansible-builder build \
+#     -f execution-environment/execution-environment.yml \
+#     -t terraform-aap-ee:latest \
+#     --container-runtime podman \
+#     --extra-build-cli-args=--platform=linux/amd64
+#
+#   podman tag terraform-aap-ee:latest aap-hub-aap.apps.cluster-wf7cj-1.dynamic.redhatworkshops.io/ansible/ee-aws-terraform-rhel9:latest
+#   podman push aap-hub-aap.apps.cluster-wf7cj-1.dynamic.redhatworkshops.io/ansible/ee-aws-terraform-rhel9:latest
 ---
 version: 3
 
@@ -24,7 +35,6 @@ dependencies:
 
 additional_build_steps:
   append_base: |
-    # Base image ships curl-minimal; installing curl conflicts with it. Git is needed for some collection installs.
     RUN $PKGMGR install -y git
     RUN curl -fsSL https://rpm.releases.hashicorp.com/RHEL/hashicorp.repo -o /etc/yum.repos.d/hashicorp.repo
     RUN $PKGMGR install -y terraform

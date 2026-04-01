@@ -79,7 +79,7 @@ ansible-playbook ansible/configure_web.yml
 
 ## Ansible Automation Platform
 
-- **Execution environment**: `./execution-environment/build-ee.sh` builds an image with Terraform and the pinned collections; push to a private registry for AAP jobs.
+- **Execution environment**: From the repo root, run `ansible-builder` as documented in `execution-environment/execution-environment.yml` (includes `linux/amd64` for AAP); push to a private registry for AAP jobs.
 - **Credentials**: Attach a cloud credential that exports AWS environment variables into the job. Do not store keys in extra variables or project files.
 - **SSH for `configure_web`**: Use machine credentials or a key stored in AAP, not committed to git.
 
