@@ -1,6 +1,8 @@
 ---
 # Configures the web stack on existing EC2 hosts (no cloud resources here).
-# Point inventory at the instance public IP from Terraform outputs (see README).
+# Default inventory (ansible.cfg) is hosts.example.ini. For your EC2 IP, copy that file to
+# hosts.ini (gitignored), set ansible_host from `terraform output -raw inventory_snippet`
+# or public_ips, then run with -i ansible/inventory/hosts.ini
 #
 #   ansible-playbook ansible/configure_web.yml -i ansible/inventory/hosts.ini
 

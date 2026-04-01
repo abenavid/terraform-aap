@@ -39,7 +39,7 @@ This repository separates **provisioning** (Terraform), **configuration** (Ansib
 └── README.md
 ```
 
-Copy `ansible/inventory/hosts.example.ini` to `ansible/inventory/hosts.ini` and set `ansible_host` from Terraform outputs. `hosts.ini` is gitignored so instance addresses stay local.
+`ansible.cfg` loads `ansible/inventory/hosts.example.ini` by default so the `web` group always exists (clone and AAP jobs without a local override). Copy that file to `ansible/inventory/hosts.ini`, set `ansible_host` from Terraform (`terraform output -raw inventory_snippet` or `public_ips`), and run `configure_web.yml` with `-i ansible/inventory/hosts.ini`. `hosts.ini` is gitignored so instance addresses stay local.
 
 ---
 
@@ -60,11 +60,13 @@ Alternatively run Terraform directly from `terraform/` (`terraform init`, `terra
 
 ### 2. Configure servers
 
-Point inventory at your instances (copy `hosts.example.ini` → `hosts.ini`), then:
+After Terraform has created the instance, copy `hosts.example.ini` → `hosts.ini`, set the IP, then:
 
 ```bash
-ansible-playbook ansible/configure_web.yml
+ansible-playbook ansible/configure_web.yml -i ansible/inventory/hosts.ini
 ```
+
+(If you omit `-i`, Ansible uses the example inventory from `ansible.cfg`; use that only for a quick connectivity check, not for your real host.)
 
 ---
 
@@ -92,4 +94,4 @@ ansible-playbook ansible/configure_web.yml
 | Install collections | `ansible-galaxy collection install -r collections/requirements.yml` |
 | Apply via Ansible | `ansible-playbook ansible/tf_ops.yml -e tf_ssh_public_key="$(cat ~/.ssh/id_rsa.pub)"` |
 | Apply Terraform only | `cd terraform && terraform init && terraform apply` |
-| Configure nodes | `ansible-playbook ansible/configure_web.yml` |
+| Configure nodes | `ansible-playbook ansible/configure_web.yml -i ansible/inventory/hosts.ini` |
