@@ -1,9 +1,9 @@
 ---
-# Destroys all AWS resources managed by terraform/ (VPC, EC2, key pair, etc.) using the same
-# state as apply. AWS credentials must come from the environment (e.g. AAP machine credential).
+# Destroys AWS resources managed by terraform/ using the same state as apply.
+# AWS credentials must come from the environment (e.g. AAP cloud credential).
 #
-# ssh_public_key comes from the AAP Job Template survey (or -e for local runs), same as tf_ops.yml.
-# Override tf_* vars if your apply used non-defaults (must match the stack you are tearing down).
+# ssh_public_key must match the apply used for this state (Terraform still evaluates variables).
+# Override tf_* vars if your apply used non-defaults.
 #
 # Run from repo root:
 #   ansible-playbook ansible/tf_destroy.yml -e 'ssh_public_key="ssh-ed25519 AAAA... comment"'
@@ -37,7 +37,7 @@
           execution-environment/execution-environment.yml, push to your hub, and select that EE).
       when: not tf_terraform_stat.stat.exists
 
-    - name: Destroy Terraform configuration (EC2, VPC, and related resources)
+    - name: Destroy Terraform configuration (EC2, key pair, security group, and VPC if created)
       cloud.terraform.terraform:
         project_path: "{{ playbook_dir }}/../terraform"
         binary_path: "{{ tf_terraform_binary }}"
@@ -48,7 +48,7 @@
           region: "{{ tf_region }}"
           instance_type: "{{ tf_instance_type }}"
           name_prefix: "{{ tf_name_prefix }}"
-          web_demo_key_name: "{{ tf_name_prefix }}-key"
           web_demo_ssh_pubkey: "{{ ssh_public_key }}"
+          use_default_vpc: "{{ tf_use_default_vpc }}"
           vpc_cidr: "{{ tf_vpc_cidr }}"
           public_subnet_cidr: "{{ tf_public_subnet_cidr }}"

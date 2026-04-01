@@ -1,13 +1,13 @@
 ---
-# Orchestrates Terraform only. AWS API credentials must come from the environment
-# (e.g. AAP machine credential) — do not pass AWS access keys in extra vars.
+# Single playbook for AAP: Terraform provisions AWS, then Ansible configures new hosts in the same run.
+# AWS credentials must come from the environment (e.g. AAP cloud credential). Do not pass AWS keys in vars.
 #
-# ssh_public_key comes from the AAP Job Template survey (or -e for local runs).
+# ssh_public_key is expected from an AAP Job Template survey (or -e for local runs).
 #
-# Run from repo root (paste key material; do not use lookup('file')):
+# Local example (paste key material; do not use lookup('file')):
 #   ansible-playbook ansible/tf_ops.yml -e 'ssh_public_key="ssh-ed25519 AAAA... comment"'
 
-- name: Provision infrastructure with Terraform
+- name: "Play 1: Apply Terraform and build in-memory inventory"
   hosts: localhost
   connection: local
   gather_facts: false
@@ -47,7 +47,71 @@
           region: "{{ tf_region }}"
           instance_type: "{{ tf_instance_type }}"
           name_prefix: "{{ tf_name_prefix }}"
-          web_demo_key_name: "{{ tf_name_prefix }}-key"
           web_demo_ssh_pubkey: "{{ ssh_public_key }}"
+          use_default_vpc: "{{ tf_use_default_vpc }}"
           vpc_cidr: "{{ tf_vpc_cidr }}"
           public_subnet_cidr: "{{ tf_public_subnet_cidr }}"
+      register: tf_apply
+
+    - name: Normalize Terraform outputs (cloud.terraform exposes .value per output)
+      ansible.builtin.set_fact:
+        tf_public_ips: "{{ tf_apply.outputs.public_ips.value }}"
+        tf_private_ips: "{{ tf_apply.outputs.private_ips.value }}"
+        tf_instance_ids: "{{ tf_apply.outputs.instance_ids.value }}"
+        tf_instance_names: "{{ tf_apply.outputs.instance_names.value }}"
+
+    - name: Add EC2 instances to in-memory group tf_group_web_demo
+      ansible.builtin.add_host:
+        name: "{{ item.3 if (item.3 | default('') | trim | length) > 0 else item.0 }}"
+        groups: tf_group_web_demo
+        ansible_host: "{{ item.0 }}"
+        public_ip_address: "{{ item.0 }}"
+        private_ip_address: "{{ item.1 }}"
+        instance_id: "{{ item.2 }}"
+        computer_name: "{{ item.3 | default('') }}"
+        ansible_user: ec2-user
+      loop: "{{ tf_public_ips | zip(tf_private_ips, tf_instance_ids, tf_instance_names) | list }}"
+
+- name: "Play 2: Configure web servers on Terraform-created hosts"
+  hosts: tf_group_web_demo
+  gather_facts: true
+  become: true
+  vars_files:
+    - vars/main.yml
+  tasks:
+    - name: Wait for SSH (instance may still be booting)
+      ansible.builtin.wait_for_connection:
+        delay: 10
+        timeout: 300
+
+    - name: Install httpd and firewalld
+      ansible.builtin.dnf:
+        name:
+          - httpd
+          - firewalld
+        state: present
+
+    - name: Start and enable firewalld
+      ansible.builtin.systemd:
+        name: firewalld
+        state: started
+        enabled: true
+
+    - name: Allow HTTP in firewalld
+      ansible.posix.firewalld:
+        service: http
+        permanent: true
+        state: enabled
+        immediate: true
+
+    - name: Deploy index page
+      ansible.builtin.template:
+        src: templates/index.html.j2
+        dest: /var/www/html/index.html
+        mode: "0644"
+
+    - name: Start and enable httpd
+      ansible.builtin.systemd:
+        name: httpd
+        state: started
+        enabled: true

@@ -1,10 +1,11 @@
 # Copy to terraform.tfvars (not committed) or pass -var on the CLI.
 # Never put AWS access keys here; use environment variables or IAM roles.
 
-region                 = "us-east-1"
-instance_type          = "t2.micro"
-name_prefix            = "tf-demo"
-web_demo_key_name      = "tf-demo-key"
-web_demo_ssh_pubkey    = "ssh-rsa AAAAB3... comment"
-vpc_cidr               = "10.0.0.0/16"
-public_subnet_cidr     = "10.0.1.0/24"
+region              = "us-east-1"
+instance_type       = "t2.micro"
+name_prefix         = "tf-demo"
+web_demo_ssh_pubkey = "ssh-rsa AAAAB3... comment"
+# web_demo_key_name = "my-stable-key-name"  # optional; omit for auto-generated unique name
+use_default_vpc     = true
+vpc_cidr            = "10.0.0.0/16"
+public_subnet_cidr  = "10.0.1.0/24"
