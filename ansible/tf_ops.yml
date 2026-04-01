@@ -1,9 +1,11 @@
 ---
-# Orchestrates Terraform only. AWS credentials must exist in the environment
-# (e.g. AAP machine credential) — never pass keys via extra vars or this playbook.
+# Orchestrates Terraform only. AWS API credentials must come from the environment
+# (e.g. AAP machine credential) — do not pass AWS access keys in extra vars.
 #
-# Run from repo root:
-#   ansible-playbook ansible/tf_ops.yml -e tf_ssh_public_key="$(cat ~/.ssh/id_rsa.pub)"
+# ssh_public_key comes from the AAP Job Template survey (or -e for local runs).
+#
+# Run from repo root (paste key material; do not use lookup('file')):
+#   ansible-playbook ansible/tf_ops.yml -e 'ssh_public_key="ssh-ed25519 AAAA... comment"'
 
 - name: Provision infrastructure with Terraform
   hosts: localhost
@@ -15,21 +17,23 @@
     - name: Require SSH public key for EC2 key pair
       ansible.builtin.assert:
         that:
-          - tf_ssh_public_key is defined
-          - (tf_ssh_public_key | string | trim | length) > 0
+          - ssh_public_key is defined
+          - (ssh_public_key | string | trim | length) > 0
         fail_msg: >-
-          Set tf_ssh_public_key (e.g. -e tf_ssh_public_key=\"$(cat ~/.ssh/id_rsa.pub)\"
-          or a file with -e @extra.yml). Public key only; never commit private keys.
+          Set ssh_public_key (AAP survey for Job Template, or -e ssh_public_key="ssh-ed25519 AAAA...").
+          Public key only; never commit private keys.
 
     - name: Apply Terraform configuration
       community.general.terraform:
         project_path: "{{ playbook_dir }}/../terraform"
         state: present
         force_init: true
+        complex_vars: true
         variables:
           region: "{{ tf_region }}"
           instance_type: "{{ tf_instance_type }}"
           name_prefix: "{{ tf_name_prefix }}"
-          ssh_public_key: "{{ tf_ssh_public_key }}"
+          web_demo_key_name: "{{ tf_name_prefix }}-key"
+          web_demo_ssh_pubkey: "{{ ssh_public_key }}"
           vpc_cidr: "{{ tf_vpc_cidr }}"
           public_subnet_cidr: "{{ tf_public_subnet_cidr }}"

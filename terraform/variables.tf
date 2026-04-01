@@ -16,7 +16,12 @@ variable "name_prefix" {
   default     = "tf-demo"
 }
 
-variable "ssh_public_key" {
+variable "web_demo_key_name" {
+  type        = string
+  description = "EC2 key pair name in AWS."
+}
+
+variable "web_demo_ssh_pubkey" {
   type        = string
   description = "SSH public key material for the EC2 key pair (OpenSSH format)."
 }
