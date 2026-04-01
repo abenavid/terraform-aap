@@ -1,9 +1,9 @@
-ARG EE_BASE_IMAGE="registry.redhat.io/ansible-automation-platform-26/ee-supported-rhel9:latest"
+ARG EE_BASE_IMAGE="registry.redhat.io/ansible-automation-platform-26/ee-minimal-rhel9:latest"
 ARG PYCMD="/usr/bin/python3"
 ARG PKGMGR_PRESERVE_CACHE=""
 ARG ANSIBLE_GALAXY_CLI_COLLECTION_OPTS=""
 ARG ANSIBLE_GALAXY_CLI_ROLE_OPTS=""
-ARG ANSIBLE_INSTALL_REFS="ansible-core>=2.16 ansible-runner>=2.3"
+ARG ANSIBLE_INSTALL_REFS="ansible-core ansible-runner"
 ARG PKGMGR="/usr/bin/microdnf"
 
 # Base build stage
@@ -22,10 +22,9 @@ COPY _build/scripts/ /output/scripts/
 COPY _build/scripts/entrypoint /opt/builder/bin/entrypoint
 RUN /output/scripts/pip_install $PYCMD
 RUN $PYCMD -m pip install --no-cache-dir $ANSIBLE_INSTALL_REFS
-# Base image ships curl-minimal; installing curl conflicts with it. Git is needed for some collection installs.
-RUN $PKGMGR install -y git
+RUN microdnf install -y git && microdnf clean all
 RUN curl -fsSL https://rpm.releases.hashicorp.com/RHEL/hashicorp.repo -o /etc/yum.repos.d/hashicorp.repo
-RUN $PKGMGR install -y terraform
+RUN microdnf install -y terraform && microdnf clean all
 
 # Galaxy build stage
 FROM base as galaxy
@@ -37,6 +36,9 @@ ARG ANSIBLE_GALAXY_CLI_ROLE_OPTS
 ARG ANSIBLE_INSTALL_REFS
 ARG PKGMGR
 
+COPY _build/configs/ansible.cfg /etc/ansible/ansible.cfg
+COPY _build/configs/galaxy-rh-token /etc/ansible/rh_token
+RUN chmod 600 /etc/ansible/rh_token
 RUN /output/scripts/check_galaxy
 COPY _build /build
 WORKDIR /build

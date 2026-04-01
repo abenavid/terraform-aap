@@ -1,40 +1,43 @@
 # Build from the repository root (default context: ./context). Pin linux/amd64 so AAP
 # workers do not hit "Exec format error" on /opt/builder/bin/entrypoint when you build on arm64.
 #
-#   ansible-builder build \
-#     -f execution-environment/execution-environment.yml \
-#     -t terraform-aap-ee:latest \
-#     --container-runtime podman \
-#     --extra-build-cli-args=--platform=linux/amd64
+# Red Hat Hub auth (for ansible-galaxy during build): copy galaxy-rh-token.example to
+# galaxy-rh-token and paste your offline token (gitignored). Without it, the galaxy stage fails.
 #
+#   ansible-builder build -f execution-environment/execution-environment.yml
 #   podman tag terraform-aap-ee:latest aap-hub-aap.apps.cluster-wf7cj-1.dynamic.redhatworkshops.io/ansible/ee-aws-terraform-rhel9:latest
 #   podman push aap-hub-aap.apps.cluster-wf7cj-1.dynamic.redhatworkshops.io/ansible/ee-aws-terraform-rhel9:latest
 ---
 version: 3
 
 options:
-  # ee-supported-rhel9 uses microdnf; /usr/bin/dnf is not present in the base image.
   package_manager_path: /usr/bin/microdnf
+
+additional_build_files:
+  - src: ansible.cfg
+    dest: configs
+  - src: galaxy-rh-token
+    dest: configs
 
 images:
   base_image:
-    name: registry.redhat.io/ansible-automation-platform-26/ee-supported-rhel9:latest
+    name: registry.redhat.io/ansible-automation-platform-26/ee-minimal-rhel9:latest
 
 dependencies:
   ansible_core:
-    package_pip: ansible-core>=2.16
+    package_pip: ansible-core
   ansible_runner:
-    package_pip: ansible-runner>=2.3
+    package_pip: ansible-runner
   galaxy: requirements.yml
-  python: requirements-python.txt
+  # python: requirements-python.txt
   system: ee/bindep.txt
-  exclude:
-    python:
-      - systemd-python
-      - ovirt-engine-sdk-python
 
 additional_build_steps:
+  prepend_galaxy:
+    - COPY _build/configs/ansible.cfg /etc/ansible/ansible.cfg
+    - COPY _build/configs/galaxy-rh-token /etc/ansible/rh_token
+    - RUN chmod 600 /etc/ansible/rh_token
   append_base: |
-    RUN $PKGMGR install -y git
+    RUN microdnf install -y git && microdnf clean all
     RUN curl -fsSL https://rpm.releases.hashicorp.com/RHEL/hashicorp.repo -o /etc/yum.repos.d/hashicorp.repo
-    RUN $PKGMGR install -y terraform
+    RUN microdnf install -y terraform && microdnf clean all

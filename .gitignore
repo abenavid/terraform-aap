@@ -1,4 +1,5 @@
 execution-environment/context
+execution-environment/galaxy-rh-token
 .terraform
 ansible/inventory/hosts.ini
 *.tfstate
@@ -12,3 +13,5 @@ s3-backend-credentials
 deploy-artifact*.json
 ansible-navigator.log
 collections
+execution-environment/ansible.cfg
+execution-environment/galaxy-rh-token

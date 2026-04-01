@@ -1,13 +1,14 @@
 ---
-# Orchestrates Terraform only. AWS API credentials must come from the environment
-# (e.g. AAP machine credential) — do not pass AWS access keys in extra vars.
+# Destroys all AWS resources managed by terraform/ (VPC, EC2, key pair, etc.) using the same
+# state as apply. AWS credentials must come from the environment (e.g. AAP machine credential).
 #
-# ssh_public_key comes from the AAP Job Template survey (or -e for local runs).
+# ssh_public_key comes from the AAP Job Template survey (or -e for local runs), same as tf_ops.yml.
+# Override tf_* vars if your apply used non-defaults (must match the stack you are tearing down).
 #
-# Run from repo root (paste key material; do not use lookup('file')):
-#   ansible-playbook ansible/tf_ops.yml -e 'ssh_public_key="ssh-ed25519 AAAA... comment"'
+# Run from repo root:
+#   ansible-playbook ansible/tf_destroy.yml -e 'ssh_public_key="ssh-ed25519 AAAA... comment"'
 
-- name: Provision infrastructure with Terraform
+- name: Destroy Terraform-managed infrastructure
   hosts: localhost
   connection: local
   gather_facts: false
@@ -36,11 +37,11 @@
           execution-environment/execution-environment.yml, push to your hub, and select that EE).
       when: not tf_terraform_stat.stat.exists
 
-    - name: Apply Terraform configuration
+    - name: Destroy Terraform configuration (EC2, VPC, and related resources)
       cloud.terraform.terraform:
         project_path: "{{ playbook_dir }}/../terraform"
         binary_path: "{{ tf_terraform_binary }}"
-        state: present
+        state: absent
         force_init: true
         complex_vars: true
         variables:

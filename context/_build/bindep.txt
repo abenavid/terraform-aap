@@ -1,1 +1,5 @@
 python3-pip [platform:rpm]
+# Pip builds systemd-python: needs libsystemd + headers for the same Python as $PYCMD (EE uses 3.12).
+systemd-devel [platform:rpm]
+gcc [platform:rpm]
+python3.12-devel [platform:rpm]
