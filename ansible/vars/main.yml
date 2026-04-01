@@ -1,0 +1,13 @@
+---
+# Non-secret defaults for Terraform (used by tf_ops.yml) and web role (configure_web.yml).
+# Override with -e or AAP extra variables. Do not store AWS keys here.
+
+tf_region: us-east-1
+tf_instance_type: t2.micro
+tf_name_prefix: tf-demo
+tf_vpc_cidr: "10.0.0.0/16"
+tf_public_subnet_cidr: "10.0.1.0/24"
+# tf_ssh_public_key must be supplied at runtime (CLI or AAP survey), not committed.
+
+# Jinja template for index.html
+web_page_title: "Terraform + Ansible + AAP"

@@ -15,7 +15,7 @@ dependencies:
   ansible_runner:
     package_pip: ansible-runner>=2.3
   galaxy: requirements.yml
-  python: ../ansible-harbor-vault/requirements-python.txt
+  python: requirements-python.txt
   system: ee/bindep.txt
   exclude:
     python:

@@ -1,15 +1,34 @@
-variable "tf_state_bucket_name" {
+variable "region" {
   type        = string
-  description = "Prefix for the state bucket; a random suffix is appended so the full name is globally unique (avoids S3 409 conflicts)."
-}
-
-variable "aws_region" {
-  type        = string
+  description = "AWS region for all resources."
   default     = "us-east-1"
-  description = "Region for the default AWS provider (EC2, demo VPC, and related resources)."
 }
 
-variable "s3_state_region" {
+variable "instance_type" {
   type        = string
-  description = "Region where the state S3 bucket is created."
+  description = "EC2 instance type."
+  default     = "t2.micro"
+}
+
+variable "name_prefix" {
+  type        = string
+  description = "Prefix for resource names and tags."
+  default     = "tf-demo"
+}
+
+variable "ssh_public_key" {
+  type        = string
+  description = "SSH public key material for the EC2 key pair (OpenSSH format)."
+}
+
+variable "vpc_cidr" {
+  type        = string
+  description = "VPC IPv4 CIDR."
+  default     = "10.0.0.0/16"
+}
+
+variable "public_subnet_cidr" {
+  type        = string
+  description = "Public subnet IPv4 CIDR (must sit inside vpc_cidr)."
+  default     = "10.0.1.0/24"
 }

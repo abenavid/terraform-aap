@@ -1,0 +1,35 @@
+---
+# Orchestrates Terraform only. AWS credentials must exist in the environment
+# (e.g. AAP machine credential) — never pass keys via extra vars or this playbook.
+#
+# Run from repo root:
+#   ansible-playbook ansible/tf_ops.yml -e tf_ssh_public_key="$(cat ~/.ssh/id_rsa.pub)"
+
+- name: Provision infrastructure with Terraform
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars/main.yml
+  tasks:
+    - name: Require SSH public key for EC2 key pair
+      ansible.builtin.assert:
+        that:
+          - tf_ssh_public_key is defined
+          - (tf_ssh_public_key | string | trim | length) > 0
+        fail_msg: >-
+          Set tf_ssh_public_key (e.g. -e tf_ssh_public_key=\"$(cat ~/.ssh/id_rsa.pub)\"
+          or a file with -e @extra.yml). Public key only; never commit private keys.
+
+    - name: Apply Terraform configuration
+      community.general.terraform:
+        project_path: "{{ playbook_dir }}/../terraform"
+        state: present
+        force_init: true
+        variables:
+          region: "{{ tf_region }}"
+          instance_type: "{{ tf_instance_type }}"
+          name_prefix: "{{ tf_name_prefix }}"
+          ssh_public_key: "{{ tf_ssh_public_key }}"
+          vpc_cidr: "{{ tf_vpc_cidr }}"
+          public_subnet_cidr: "{{ tf_public_subnet_cidr }}"

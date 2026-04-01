@@ -1,0 +1,43 @@
+---
+# Configures the web stack on existing EC2 hosts (no cloud resources here).
+# Point inventory at the instance public IP from Terraform outputs (see README).
+#
+#   ansible-playbook ansible/configure_web.yml -i ansible/inventory/hosts.ini
+
+- name: Configure Apache and firewall for demo site
+  hosts: web
+  become: true
+  vars_files:
+    - vars/main.yml
+  tasks:
+    - name: Install httpd and firewalld
+      ansible.builtin.dnf:
+        name:
+          - httpd
+          - firewalld
+        state: present
+
+    - name: Start and enable firewalld
+      ansible.builtin.systemd:
+        name: firewalld
+        state: started
+        enabled: true
+
+    - name: Allow HTTP in firewalld
+      ansible.posix.firewalld:
+        service: http
+        permanent: true
+        state: enabled
+        immediate: true
+
+    - name: Deploy index page
+      ansible.builtin.template:
+        src: templates/index.html.j2
+        dest: /var/www/html/index.html
+        mode: "0644"
+
+    - name: Start and enable httpd
+      ansible.builtin.systemd:
+        name: httpd
+        state: started
+        enabled: true

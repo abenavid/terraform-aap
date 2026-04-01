@@ -1,6 +1,6 @@
 execution-environment/context
-context/
 .terraform
+ansible/inventory/hosts.ini
 *.tfstate
 *.tfstate.*
 .DS_Store
@@ -11,3 +11,4 @@ terraform.tfvars.json
 s3-backend-credentials
 deploy-artifact*.json
 ansible-navigator.log
+collections
