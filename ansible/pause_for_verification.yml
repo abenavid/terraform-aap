@@ -1,9 +1,0 @@
----
-- name: Pause for manual verification
-  hosts: localhost
-  connection: local
-  gather_facts: false
-  tasks:
-    - name: Wait 5 minutes 
-      ansible.builtin.pause:
-        minutes: 5

@@ -115,3 +115,58 @@
         name: httpd
         state: started
         enabled: true
+
+- name: "Play 3: Pause for manual verification"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Wait 5 minutes 
+      ansible.builtin.pause:
+        minutes: 5
+    
+
+- name: "Play 4: Destroy Terraform-managed infrastructure"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars/main.yml
+  tasks:
+    - name: Require SSH public key for EC2 key pair
+      ansible.builtin.assert:
+        that:
+          - ssh_public_key is defined
+          - (ssh_public_key | string | trim | length) > 0
+        fail_msg: >-
+          Set ssh_public_key (AAP survey for Job Template, or -e ssh_public_key="ssh-ed25519 AAAA...").
+          Public key only; never commit private keys.
+
+    - name: Verify Terraform CLI exists in execution environment
+      ansible.builtin.stat:
+        path: "{{ tf_terraform_binary }}"
+      register: tf_terraform_stat
+
+    - name: Fail if Terraform CLI is missing
+      ansible.builtin.fail:
+        msg: >-
+          Terraform CLI not found at {{ tf_terraform_binary }}.
+          The Job Template must use an execution environment that installs Terraform (e.g. build from
+          execution-environment/execution-environment.yml, push to your hub, and select that EE).
+      when: not tf_terraform_stat.stat.exists
+
+    - name: Destroy Terraform configuration (EC2, key pair, security group, and VPC if created)
+      cloud.terraform.terraform:
+        project_path: "{{ playbook_dir }}/../terraform"
+        binary_path: "{{ tf_terraform_binary }}"
+        state: absent
+        force_init: true
+        complex_vars: true
+        variables:
+          region: "{{ tf_region }}"
+          instance_type: "{{ tf_instance_type }}"
+          name_prefix: "{{ tf_name_prefix }}"
+          web_demo_ssh_pubkey: "{{ ssh_public_key }}"
+          use_default_vpc: "{{ tf_use_default_vpc }}"
+          vpc_cidr: "{{ tf_vpc_cidr }}"
+          public_subnet_cidr: "{{ tf_public_subnet_cidr }}"
