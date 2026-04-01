@@ -34,29 +34,33 @@ variable "web_demo_ssh_pubkey" {
 variable "create_vpc" {
   type        = bool
   default     = false
-  description = "If true, create a new VPC, public subnet, IGW, and routes. If false, set existing_vpc_id and existing_subnet_id (preferred demo path)."
+  description = <<-EOT
+    When true, Terraform creates a new VPC (and ignores existing ID variables if set).
+    When false with both existing_vpc_id and existing_subnet_id set, those are reused.
+    When false with both empty, Terraform auto-creates a VPC (same as a full create path).
+  EOT
 }
 
 variable "existing_vpc_id" {
   type        = string
   default     = ""
-  description = "Existing VPC ID for the security group and instance (required when create_vpc is false)."
+  description = "Existing VPC ID for the security group. Use with existing_subnet_id, or leave empty for auto-create."
 }
 
 variable "existing_subnet_id" {
   type        = string
   default     = ""
-  description = "Existing subnet ID for the instance; must map public IPs or allow a reachable address if you need SSH/HTTP from outside (required when create_vpc is false)."
+  description = "Existing subnet ID for the instance. Use with existing_vpc_id, or leave empty for auto-create."
 }
 
 variable "vpc_cidr" {
   type        = string
-  description = "VPC IPv4 CIDR (used only when create_vpc is true)."
+  description = "VPC IPv4 CIDR (used only when a new VPC is created)."
   default     = "10.0.0.0/16"
 }
 
 variable "public_subnet_cidr" {
   type        = string
-  description = "Public subnet IPv4 CIDR (must sit inside vpc_cidr; used only when create_vpc is true)."
+  description = "Public subnet IPv4 CIDR (must sit inside vpc_cidr; used only when a new VPC is created)."
   default     = "10.0.1.0/24"
 }

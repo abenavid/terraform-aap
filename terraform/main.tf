@@ -1,3 +1,14 @@
+# Pair rule: both IDs or neither (partial input is invalid). Not a resource precondition.
+check "existing_vpc_subnet_pair" {
+  assert {
+    condition = (
+      (var.existing_vpc_id == "" && var.existing_subnet_id == "") ||
+      (var.existing_vpc_id != "" && var.existing_subnet_id != "")
+    )
+    error_message = "Set both existing_vpc_id and existing_subnet_id, or leave both empty (auto-create VPC)."
+  }
+}
+
 data "aws_availability_zones" "available" {
   state = "available"
 }
@@ -12,9 +23,19 @@ data "aws_ami" "al2023" {
   }
 }
 
-# --- Optional: create a VPC only when create_vpc is true
+locals {
+  use_existing = var.existing_vpc_id != "" && var.existing_subnet_id != ""
+  # Explicit create_vpc, or reuse nothing (auto-create), or create_vpc=true even when IDs were passed.
+  effective_create_vpc = var.create_vpc || !local.use_existing
+  vpc_id               = local.effective_create_vpc ? aws_vpc.main[0].id : var.existing_vpc_id
+  public_subnet_id     = local.effective_create_vpc ? aws_subnet.public[0].id : var.existing_subnet_id
+  # Unique key name avoids InvalidKeyPair.Duplicate when state was lost but the old key still exists in AWS.
+  web_key_name = var.web_demo_key_name != "" ? var.web_demo_key_name : "${var.name_prefix}-key-${random_id.key_suffix.hex}"
+}
+
+# --- VPC stack only when we are not reusing an existing VPC + subnet pair
 resource "aws_vpc" "main" {
-  count                = var.create_vpc ? 1 : 0
+  count                = local.effective_create_vpc ? 1 : 0
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
@@ -24,7 +45,7 @@ resource "aws_vpc" "main" {
 }
 
 resource "aws_internet_gateway" "main" {
-  count  = var.create_vpc ? 1 : 0
+  count  = local.effective_create_vpc ? 1 : 0
   vpc_id = aws_vpc.main[0].id
 
   tags = {
@@ -33,7 +54,7 @@ resource "aws_internet_gateway" "main" {
 }
 
 resource "aws_subnet" "public" {
-  count                   = var.create_vpc ? 1 : 0
+  count                   = local.effective_create_vpc ? 1 : 0
   vpc_id                  = aws_vpc.main[0].id
   cidr_block              = var.public_subnet_cidr
   availability_zone       = data.aws_availability_zones.available.names[0]
@@ -45,7 +66,7 @@ resource "aws_subnet" "public" {
 }
 
 resource "aws_route_table" "public" {
-  count  = var.create_vpc ? 1 : 0
+  count  = local.effective_create_vpc ? 1 : 0
   vpc_id = aws_vpc.main[0].id
 
   tags = {
@@ -54,38 +75,20 @@ resource "aws_route_table" "public" {
 }
 
 resource "aws_route" "public_internet" {
-  count                  = var.create_vpc ? 1 : 0
+  count                  = local.effective_create_vpc ? 1 : 0
   route_table_id         = aws_route_table.public[0].id
   destination_cidr_block = "0.0.0.0/0"
   gateway_id             = aws_internet_gateway.main[0].id
 }
 
 resource "aws_route_table_association" "public" {
-  count          = var.create_vpc ? 1 : 0
+  count          = local.effective_create_vpc ? 1 : 0
   subnet_id      = aws_subnet.public[0].id
   route_table_id = aws_route_table.public[0].id
 }
 
 resource "random_id" "key_suffix" {
   byte_length = 4
-
-  lifecycle {
-    precondition {
-      condition = (
-        var.create_vpc && var.existing_vpc_id == "" && var.existing_subnet_id == ""
-        ) || (
-        !var.create_vpc && var.existing_vpc_id != "" && var.existing_subnet_id != ""
-      )
-      error_message = "Either set create_vpc = true and leave existing_vpc_id and existing_subnet_id empty, or set create_vpc = false and provide both existing_vpc_id and existing_subnet_id."
-    }
-  }
-}
-
-locals {
-  vpc_id           = var.create_vpc ? aws_vpc.main[0].id : var.existing_vpc_id
-  public_subnet_id = var.create_vpc ? aws_subnet.public[0].id : var.existing_subnet_id
-  # Unique key name avoids InvalidKeyPair.Duplicate when state was lost but the old key still exists in AWS.
-  web_key_name = var.web_demo_key_name != "" ? var.web_demo_key_name : "${var.name_prefix}-key-${random_id.key_suffix.hex}"
 }
 
 resource "aws_security_group" "instance" {

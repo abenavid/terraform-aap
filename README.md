@@ -39,7 +39,7 @@ By default this project uses a **local** Terraform backend (`terraform.tfstate` 
 
 **Mitigation used here (demo scope):**
 
-- **Networking** does **not** rely on the account **default VPC**. Many AWS accounts (especially newer ones or locked-down orgs) have **no default VPC** in a region, so looking up `default = true` fails. The **preferred** path is to pass **`existing_vpc_id`** and **`existing_subnet_id`** for a VPC and subnet your team or lab already uses (typical for shared or demo accounts). Optionally set **`create_vpc = true`** to create a small VPC from this module; that counts against regional **VPC limits**, so use sparingly in repeat demos.
+- **Networking** does **not** rely on the account **default VPC**. Many AWS accounts (especially newer ones or locked-down orgs) have **no default VPC** in a region, so looking up `default = true` fails. The **recommended** path is to pass **`existing_vpc_id`** and **`existing_subnet_id`** for a VPC and subnet your team or lab already uses. If you omit both IDs, Terraform **auto-creates** a small VPC so the job does not fail with empty inputs—important because **AAP jobs are ephemeral** and **repeated runs** should stay resilient without a survey for every field. Optionally set **`create_vpc = true`** to force a new VPC even when you could reuse IDs. Creating VPCs counts against regional **VPC limits**, so prefer existing networking in shared accounts when you can.
 - **Key pair naming** defaults to an auto-generated `name_prefix-key-<suffix>` so a fresh run without state is less likely to hit **InvalidKeyPair.Duplicate** against an old key left in AWS.
 
 **Long-term fix:** use **remote state** (e.g. S3 + DynamoDB locking, Terraform Cloud, etc.) so every apply/destroy uses one source of truth. This repo keeps the backend simple on purpose; document your backend in your own environment.
@@ -48,11 +48,20 @@ By default this project uses a **local** Terraform backend (`terraform.tfstate` 
 
 ## AWS networking (important)
 
-- **Default VPC:** Older accounts often had a default VPC per region; **many accounts today do not**. This project **does not** require or query a default VPC.
-- **Shared / demo accounts:** You should usually point Terraform at an **existing VPC and subnet** your administrators created (or a lab “playground” VPC). Set `create_vpc = false` and supply **`existing_vpc_id`** and **`existing_subnet_id`** (Terraform variables) or the matching Ansible extra vars **`tf_existing_vpc_id`** and **`tf_existing_subnet_id`**.
-- **Create a VPC:** Set `create_vpc = true` and leave the existing ID variables empty. Terraform will create a VPC, public subnet, internet gateway, and routes. Use this only when you explicitly want a new VPC and accept the quota impact.
+This module supports **two modes**:
 
-The subnet you choose must allow what you need for the demo (for example **map public IP** on the subnet if you rely on the instance’s public address for SSH and HTTP from your client).
+1. **Reuse existing VPC and subnet (recommended for demos)**  
+   Set **`existing_vpc_id`** and **`existing_subnet_id`** (Terraform) or Ansible extra vars **`tf_existing_vpc_id`** and **`tf_existing_subnet_id`**. Leave **`create_vpc`** at **`false`** (default). The subnet should map public IPs if you need SSH/HTTP from the internet.
+
+2. **Create a new VPC (fallback or explicit)**  
+   - **Auto-fallback:** If **`create_vpc`** is **`false`** and **both** existing ID variables are **empty**, Terraform **creates** a VPC, public subnet, internet gateway, and routes automatically. That way a minimal AAP job (SSH key only) still works.  
+   - **Explicit:** Set **`create_vpc`** to **`true`** to always create a new VPC stack (for example when you want isolation regardless of survey inputs).
+
+You must **never** pass only one of **`existing_vpc_id`** / **`existing_subnet_id`**; Terraform validates that the pair is complete or both empty.
+
+**Why auto-create helps:** Many accounts have **no default VPC**. **AAP jobs** often run with **no persistent workspace** and **minimal extra vars**, so requiring VPC IDs on every run breaks demos. Auto-creating when IDs are absent keeps applies reliable while still letting you pin to a shared VPC when you have the IDs.
+
+The subnet you choose (or the one created) must allow what you need for the demo (for example **map public IP** on the subnet if you rely on the instance’s public address for SSH and HTTP from your client).
 
 ---
 
@@ -60,7 +69,7 @@ The subnet you choose must allow what you need for the demo (for example **map p
 
 | Path | Purpose |
 |------|---------|
-| **`terraform/`** | Infrastructure only: VPC (optional), security group, key pair, EC2. |
+| **`terraform/`** | Infrastructure only: VPC (optional or auto), security group, key pair, EC2. |
 | **`ansible/`** | Orchestration: `tf_ops.yml` (Terraform + configuration in one playbook). |
 | **`collections/`** | Galaxy collection pins (`ansible-galaxy collection install -r collections/requirements.yml`). |
 | **`execution-environment/`** | Optional EE image with Terraform CLI + collections for AAP. |
@@ -82,7 +91,9 @@ ansible-galaxy collection install -r collections/requirements.yml
 
 ### One playbook: Terraform + configure (from repo root)
 
-Set networking: either pass **existing** VPC and subnet IDs, or set **`tf_create_vpc: true`** in extra vars (see `ansible/vars/main.yml`).
+**Preferred:** pass existing VPC and subnet (or set them in `ansible/vars/main.yml` / AAP extra vars).
+
+**Minimal:** only `ssh_public_key`—Terraform will create a VPC if no IDs are provided (same defaults as `tf_create_vpc: false` with empty IDs).
 
 ```bash
 export AWS_ACCESS_KEY_ID=...
@@ -97,7 +108,7 @@ ansible-playbook ansible/tf_ops.yml \
 
 ### Destroy (Play 4 in `tf_ops.yml`)
 
-Use the **same** Terraform variables as your last apply (same VPC mode and IDs, or same `tf_create_vpc`).
+Use the **same** networking mode as your last apply (same existing IDs, or empty IDs with auto-created VPC, or `tf_create_vpc: true`).
 
 ```bash
 ansible-playbook ansible/tf_ops.yml \
@@ -111,6 +122,8 @@ Alternatively run Terraform destroy from `terraform/` with the same `terraform.t
 
 ### Terraform CLI only (optional)
 
+Requires **Terraform 1.5+** (for input checks).
+
 ```bash
 cd terraform && terraform init && terraform apply
 ```
@@ -121,9 +134,9 @@ Use `terraform/terraform.tfvars.example` as a template. Never commit secrets or 
 
 ## Ansible Automation Platform
 
-- **Execution environment:** Include **Terraform CLI** and collections from `collections/requirements.yml` (see `execution-environment/`).
+- **Execution environment:** Include **Terraform CLI 1.5+** and collections from `collections/requirements.yml` (see `execution-environment/`).
 - **Job Template:** Single playbook **`ansible/tf_ops.yml`**, project root = repo root (or adjust `project_path` in the playbook if your layout differs).
-- **Survey / extra vars:** `ssh_public_key` (public key string); add **`tf_existing_vpc_id`** and **`tf_existing_subnet_id`** for the preferred path, or **`tf_create_vpc: true`** to create a VPC.
+- **Survey / extra vars:** `ssh_public_key` (public key string); add **`tf_existing_vpc_id`** and **`tf_existing_subnet_id`** for the preferred path, or leave them empty for **auto VPC creation**. Set **`tf_create_vpc: true`** to force creating a new VPC.
 - **Credential:** AWS credential type that injects environment variables **or** a role the job pod can assume.
 - **SSH to EC2:** Machine credential (or equivalent) whose private key matches the surveyed public key.
 

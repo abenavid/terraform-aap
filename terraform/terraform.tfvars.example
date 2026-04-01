@@ -7,12 +7,17 @@ name_prefix         = "tf-demo"
 web_demo_ssh_pubkey = "ssh-rsa AAAAB3... comment"
 # web_demo_key_name = "my-stable-key-name"  # optional; omit for auto-generated unique name
 
-# Preferred demo path: use an existing VPC and subnet (many accounts have no default VPC).
+# --- Mode A (recommended): reuse an existing VPC + subnet
 create_vpc          = false
 existing_vpc_id     = "vpc-0123456789abcdef0"
 existing_subnet_id  = "subnet-0123456789abcdef0"
 
-# Alternative: create a dedicated VPC (counts against your VPC quota).
+# --- Mode B: auto-create VPC (leave both IDs empty; create_vpc can stay false)
+# create_vpc         = false
+# existing_vpc_id    = ""
+# existing_subnet_id = ""
+
+# --- Mode C: always create a new VPC (e.g. explicit isolation)
 # create_vpc         = true
 # existing_vpc_id    = ""
 # existing_subnet_id = ""
