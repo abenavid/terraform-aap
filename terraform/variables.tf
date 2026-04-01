@@ -31,20 +31,32 @@ variable "web_demo_ssh_pubkey" {
   description = "SSH public key material for the EC2 key pair (OpenSSH format)."
 }
 
-variable "use_default_vpc" {
+variable "create_vpc" {
   type        = bool
-  default     = true
-  description = "If true, place the instance in the account default VPC and a sorted default subnet (reduces new VPCs and VpcLimitExceeded on repeat demos). If false, create a dedicated VPC and public subnet."
+  default     = false
+  description = "If true, create a new VPC, public subnet, IGW, and routes. If false, set existing_vpc_id and existing_subnet_id (preferred demo path)."
+}
+
+variable "existing_vpc_id" {
+  type        = string
+  default     = ""
+  description = "Existing VPC ID for the security group and instance (required when create_vpc is false)."
+}
+
+variable "existing_subnet_id" {
+  type        = string
+  default     = ""
+  description = "Existing subnet ID for the instance; must map public IPs or allow a reachable address if you need SSH/HTTP from outside (required when create_vpc is false)."
 }
 
 variable "vpc_cidr" {
   type        = string
-  description = "VPC IPv4 CIDR (used only when use_default_vpc is false)."
+  description = "VPC IPv4 CIDR (used only when create_vpc is true)."
   default     = "10.0.0.0/16"
 }
 
 variable "public_subnet_cidr" {
   type        = string
-  description = "Public subnet IPv4 CIDR (must sit inside vpc_cidr; used only when use_default_vpc is false)."
+  description = "Public subnet IPv4 CIDR (must sit inside vpc_cidr; used only when create_vpc is true)."
   default     = "10.0.1.0/24"
 }

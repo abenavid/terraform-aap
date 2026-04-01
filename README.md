@@ -39,10 +39,20 @@ By default this project uses a **local** Terraform backend (`terraform.tfstate` 
 
 **Mitigation used here (demo scope):**
 
-- **`use_default_vpc`** (default `true`) prefers the account **default VPC** and a subnet, which reduces hitting **VpcLimitExceeded** from creating many dedicated VPCs.
+- **Networking** does **not** rely on the account **default VPC**. Many AWS accounts (especially newer ones or locked-down orgs) have **no default VPC** in a region, so looking up `default = true` fails. The **preferred** path is to pass **`existing_vpc_id`** and **`existing_subnet_id`** for a VPC and subnet your team or lab already uses (typical for shared or demo accounts). Optionally set **`create_vpc = true`** to create a small VPC from this module; that counts against regional **VPC limits**, so use sparingly in repeat demos.
 - **Key pair naming** defaults to an auto-generated `name_prefix-key-<suffix>` so a fresh run without state is less likely to hit **InvalidKeyPair.Duplicate** against an old key left in AWS.
 
 **Long-term fix:** use **remote state** (e.g. S3 + DynamoDB locking, Terraform Cloud, etc.) so every apply/destroy uses one source of truth. This repo keeps the backend simple on purpose; document your backend in your own environment.
+
+---
+
+## AWS networking (important)
+
+- **Default VPC:** Older accounts often had a default VPC per region; **many accounts today do not**. This project **does not** require or query a default VPC.
+- **Shared / demo accounts:** You should usually point Terraform at an **existing VPC and subnet** your administrators created (or a lab “playground” VPC). Set `create_vpc = false` and supply **`existing_vpc_id`** and **`existing_subnet_id`** (Terraform variables) or the matching Ansible extra vars **`tf_existing_vpc_id`** and **`tf_existing_subnet_id`**.
+- **Create a VPC:** Set `create_vpc = true` and leave the existing ID variables empty. Terraform will create a VPC, public subnet, internet gateway, and routes. Use this only when you explicitly want a new VPC and accept the quota impact.
+
+The subnet you choose must allow what you need for the demo (for example **map public IP** on the subnet if you rely on the instance’s public address for SSH and HTTP from your client).
 
 ---
 
@@ -72,21 +82,32 @@ ansible-galaxy collection install -r collections/requirements.yml
 
 ### One playbook: Terraform + configure (from repo root)
 
+Set networking: either pass **existing** VPC and subnet IDs, or set **`tf_create_vpc: true`** in extra vars (see `ansible/vars/main.yml`).
+
 ```bash
 export AWS_ACCESS_KEY_ID=...
 export AWS_SECRET_ACCESS_KEY=...
 # optional: AWS_SESSION_TOKEN, AWS_DEFAULT_REGION
 
 ansible-playbook ansible/tf_ops.yml \
-  -e 'ssh_public_key="ssh-ed25519 AAAA... your-comment"'
+  -e 'ssh_public_key="ssh-ed25519 AAAA... your-comment"' \
+  -e 'tf_existing_vpc_id=vpc-xxxxxxxx' \
+  -e 'tf_existing_subnet_id=subnet-xxxxxxxx'
 ```
 
-### Destroy (same Terraform state / variables as your last apply)
+### Destroy (Play 4 in `tf_ops.yml`)
+
+Use the **same** Terraform variables as your last apply (same VPC mode and IDs, or same `tf_create_vpc`).
 
 ```bash
-ansible-playbook ansible/tf_destroy.yml \
-  -e 'ssh_public_key="ssh-ed25519 AAAA... your-comment"'
+ansible-playbook ansible/tf_ops.yml \
+  --start-at-task "Destroy Terraform configuration (EC2, key pair, security group, and VPC if created)" \
+  -e 'ssh_public_key="ssh-ed25519 AAAA... your-comment"' \
+  -e 'tf_existing_vpc_id=vpc-xxxxxxxx' \
+  -e 'tf_existing_subnet_id=subnet-xxxxxxxx'
 ```
+
+Alternatively run Terraform destroy from `terraform/` with the same `terraform.tfvars` or `-var` flags.
 
 ### Terraform CLI only (optional)
 
@@ -102,7 +123,7 @@ Use `terraform/terraform.tfvars.example` as a template. Never commit secrets or 
 
 - **Execution environment:** Include **Terraform CLI** and collections from `collections/requirements.yml` (see `execution-environment/`).
 - **Job Template:** Single playbook **`ansible/tf_ops.yml`**, project root = repo root (or adjust `project_path` in the playbook if your layout differs).
-- **Survey / extra vars:** `ssh_public_key` (public key string).
+- **Survey / extra vars:** `ssh_public_key` (public key string); add **`tf_existing_vpc_id`** and **`tf_existing_subnet_id`** for the preferred path, or **`tf_create_vpc: true`** to create a VPC.
 - **Credential:** AWS credential type that injects environment variables **or** a role the job pod can assume.
 - **SSH to EC2:** Machine credential (or equivalent) whose private key matches the surveyed public key.
 
@@ -113,6 +134,6 @@ Use `terraform/terraform.tfvars.example` as a template. Never commit secrets or 
 | Step | Command |
 |------|---------|
 | Install collections | `ansible-galaxy collection install -r collections/requirements.yml` |
-| Apply + configure | `ansible-playbook ansible/tf_ops.yml -e 'ssh_public_key="..."'` |
-| Destroy stack | `ansible-playbook ansible/tf_destroy.yml -e 'ssh_public_key="..."'` |
+| Apply + configure | `ansible-playbook ansible/tf_ops.yml -e 'ssh_public_key="..."' -e tf_existing_vpc_id=... -e tf_existing_subnet_id=...` |
+| Destroy stack | Start at destroy task in `tf_ops.yml` or `cd terraform && terraform destroy` |
 | Terraform only | `cd terraform && terraform init && terraform apply` |

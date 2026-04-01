@@ -5,7 +5,10 @@
 tf_region: us-east-1
 tf_instance_type: t2.micro
 tf_name_prefix: tf-demo
-tf_use_default_vpc: true
+# Networking: preferred path is existing VPC + subnet (many accounts have no default VPC).
+tf_create_vpc: false
+tf_existing_vpc_id: ""
+tf_existing_subnet_id: ""
 tf_vpc_cidr: "10.0.0.0/16"
 tf_public_subnet_cidr: "10.0.1.0/24"
 # Path to terraform binary (Hashicorp RPM on RHEL EE: /usr/bin/terraform). Override locally if needed

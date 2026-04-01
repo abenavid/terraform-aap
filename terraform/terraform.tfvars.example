@@ -6,6 +6,15 @@ instance_type       = "t2.micro"
 name_prefix         = "tf-demo"
 web_demo_ssh_pubkey = "ssh-rsa AAAAB3... comment"
 # web_demo_key_name = "my-stable-key-name"  # optional; omit for auto-generated unique name
-use_default_vpc     = true
-vpc_cidr            = "10.0.0.0/16"
-public_subnet_cidr  = "10.0.1.0/24"
+
+# Preferred demo path: use an existing VPC and subnet (many accounts have no default VPC).
+create_vpc          = false
+existing_vpc_id     = "vpc-0123456789abcdef0"
+existing_subnet_id  = "subnet-0123456789abcdef0"
+
+# Alternative: create a dedicated VPC (counts against your VPC quota).
+# create_vpc         = true
+# existing_vpc_id    = ""
+# existing_subnet_id = ""
+# vpc_cidr           = "10.0.0.0/16"
+# public_subnet_cidr = "10.0.1.0/24"

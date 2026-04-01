@@ -12,23 +12,9 @@ data "aws_ami" "al2023" {
   }
 }
 
-# --- Optional: reuse the account default VPC (avoids hitting per-region VPC limits on repeat demos)
-data "aws_vpc" "default" {
-  count   = var.use_default_vpc ? 1 : 0
-  default = true
-}
-
-data "aws_subnets" "default" {
-  count = var.use_default_vpc ? 1 : 0
-  filter {
-    name   = "vpc-id"
-    values = [data.aws_vpc.default[0].id]
-  }
-}
-
-# --- Optional: create a dedicated VPC when use_default_vpc is false
+# --- Optional: create a VPC only when create_vpc is true
 resource "aws_vpc" "main" {
-  count                = var.use_default_vpc ? 0 : 1
+  count                = var.create_vpc ? 1 : 0
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
@@ -38,7 +24,7 @@ resource "aws_vpc" "main" {
 }
 
 resource "aws_internet_gateway" "main" {
-  count  = var.use_default_vpc ? 0 : 1
+  count  = var.create_vpc ? 1 : 0
   vpc_id = aws_vpc.main[0].id
 
   tags = {
@@ -47,7 +33,7 @@ resource "aws_internet_gateway" "main" {
 }
 
 resource "aws_subnet" "public" {
-  count                   = var.use_default_vpc ? 0 : 1
+  count                   = var.create_vpc ? 1 : 0
   vpc_id                  = aws_vpc.main[0].id
   cidr_block              = var.public_subnet_cidr
   availability_zone       = data.aws_availability_zones.available.names[0]
@@ -59,7 +45,7 @@ resource "aws_subnet" "public" {
 }
 
 resource "aws_route_table" "public" {
-  count  = var.use_default_vpc ? 0 : 1
+  count  = var.create_vpc ? 1 : 0
   vpc_id = aws_vpc.main[0].id
 
   tags = {
@@ -68,25 +54,36 @@ resource "aws_route_table" "public" {
 }
 
 resource "aws_route" "public_internet" {
-  count                  = var.use_default_vpc ? 0 : 1
+  count                  = var.create_vpc ? 1 : 0
   route_table_id         = aws_route_table.public[0].id
   destination_cidr_block = "0.0.0.0/0"
   gateway_id             = aws_internet_gateway.main[0].id
 }
 
 resource "aws_route_table_association" "public" {
-  count          = var.use_default_vpc ? 0 : 1
+  count          = var.create_vpc ? 1 : 0
   subnet_id      = aws_subnet.public[0].id
   route_table_id = aws_route_table.public[0].id
 }
 
 resource "random_id" "key_suffix" {
   byte_length = 4
+
+  lifecycle {
+    precondition {
+      condition = (
+        var.create_vpc && var.existing_vpc_id == "" && var.existing_subnet_id == ""
+        ) || (
+        !var.create_vpc && var.existing_vpc_id != "" && var.existing_subnet_id != ""
+      )
+      error_message = "Either set create_vpc = true and leave existing_vpc_id and existing_subnet_id empty, or set create_vpc = false and provide both existing_vpc_id and existing_subnet_id."
+    }
+  }
 }
 
 locals {
-  vpc_id           = var.use_default_vpc ? data.aws_vpc.default[0].id : aws_vpc.main[0].id
-  public_subnet_id = var.use_default_vpc ? sort(data.aws_subnets.default[0].ids)[0] : aws_subnet.public[0].id
+  vpc_id           = var.create_vpc ? aws_vpc.main[0].id : var.existing_vpc_id
+  public_subnet_id = var.create_vpc ? aws_subnet.public[0].id : var.existing_subnet_id
   # Unique key name avoids InvalidKeyPair.Duplicate when state was lost but the old key still exists in AWS.
   web_key_name = var.web_demo_key_name != "" ? var.web_demo_key_name : "${var.name_prefix}-key-${random_id.key_suffix.hex}"
 }
