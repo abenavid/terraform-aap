@@ -1,5 +1,9 @@
 ---
-# Requires: ansible-galaxy collection install -r ansible-requirements.yml (amazon.aws, community.aws, cloud.terraform)
+# Requires: cloud.terraform (and other) collections — install locally with:
+#   ansible-galaxy collection install -r collections/requirements.yml
+# On AAP: either use an EE built from execution-environment/ (includes these) or enable project
+# collection install so collections/requirements.yml is applied; otherwise you get
+# "couldn't resolve module/action 'cloud.terraform.terraform'".
 # Copy deploy_vars.yml.example to deploy_vars.yml and set values, or run on AAP with a credential
 # that injects TF_STATE_BUCKET, TF_S3_BACKEND_REGION, AWS keys, etc. (environment overrides file).
 #
