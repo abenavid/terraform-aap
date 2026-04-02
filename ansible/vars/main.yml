@@ -1,6 +1,5 @@
 ---
 # Non-secret defaults for Terraform (tf_ops.yml) and Play 2 (web config).
-# Override with -e or AAP extra variables. Do not store AWS keys here.
 
 tf_region: us-east-1
 tf_instance_type: t2.micro
@@ -12,7 +11,6 @@ tf_existing_subnet_id: ""
 tf_vpc_cidr: "10.0.0.0/16"
 tf_public_subnet_cidr: "10.0.1.0/24"
 # Path to terraform binary (Hashicorp RPM on RHEL EE: /usr/bin/terraform). Override locally if needed
-# (e.g. -e tf_terraform_binary=/opt/homebrew/bin/terraform).
 tf_terraform_binary: /usr/bin/terraform
 # ssh_public_key must be supplied at runtime (AAP survey or -e), not committed.
 
@@ -21,4 +19,4 @@ tf_terraform_binary: /usr/bin/terraform
 cleanup_after_test: true
 
 # Jinja template for index.html
-web_page_title: "Terraform + Ansible + AAP"
+web_page_title: "Demo: Terraform + Ansible + AAP"
