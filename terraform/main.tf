@@ -130,10 +130,11 @@ resource "aws_key_pair" "web_key" {
 }
 
 resource "aws_instance" "app" {
-  ami                         = data.aws_ami.al2023.id
-  instance_type               = var.instance_type
-  subnet_id                   = local.public_subnet_id
-  vpc_security_group_ids      = [aws_security_group.instance.id]
+  ami                    = data.aws_ami.al2023.id
+  instance_type          = var.instance_type
+  subnet_id              = local.public_subnet_id
+  vpc_security_group_ids = [aws_security_group.instance.id]
+  # Required for SSH: must match the key pair built from var.web_demo_ssh_pubkey (same as AAP Machine credential).
   key_name                    = aws_key_pair.web_key.key_name
   associate_public_ip_address = true
 

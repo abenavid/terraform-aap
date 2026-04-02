@@ -1,11 +1,4 @@
 ---
-# Single playbook for AAP: Terraform provisions AWS, then Ansible configures new hosts in the same run.
-# AWS credentials must come from the environment (e.g. AAP cloud credential). Do not pass AWS keys in vars.
-#
-# ssh_public_key is expected from an AAP Job Template survey (or -e for local runs).
-#
-# Local example (paste key material; do not use lookup('file')):
-#   ansible-playbook ansible/tf_ops.yml -e 'ssh_public_key="ssh-ed25519 AAAA... comment"'
 
 - name: "Play 1: Apply Terraform and build in-memory inventory"
   hosts: localhost
@@ -61,6 +54,14 @@
         tf_private_ips: "{{ tf_apply.outputs.private_ips.value }}"
         tf_instance_ids: "{{ tf_apply.outputs.instance_ids.value }}"
         tf_instance_names: "{{ tf_apply.outputs.instance_names.value }}"
+        tf_instance_key_name: "{{ tf_apply.outputs.instance_key_name.value | default('') }}"
+
+    - name: Precheck — Terraform targets and EC2 key pair (SSH needs matching AAP Machine credential)
+      ansible.builtin.debug:
+        msg:
+          instance_names: "{{ tf_instance_names }}"
+          public_ips: "{{ tf_public_ips }}"
+          instance_key_name: "{{ tf_instance_key_name }}"
 
     - name: Add EC2 instances to in-memory group tf_group_web_demo
       ansible.builtin.add_host:
@@ -118,15 +119,17 @@
         state: started
         enabled: true
 
-- name: "Play 3: Pause for manual verification"
+- name: "Play 3: Pause for manual verification (before destroy when cleanup_after_test)"
   hosts: localhost
   connection: local
   gather_facts: false
+  vars_files:
+    - vars/main.yml
   tasks:
-    - name: Wait 5 minutes 
+    - name: Wait 5 minutes
       ansible.builtin.pause:
         minutes: 5
-    
+      when: cleanup_after_test
 
 - name: "Play 4: Destroy Terraform-managed infrastructure"
   hosts: localhost
@@ -135,42 +138,62 @@
   vars_files:
     - vars/main.yml
   tasks:
-    - name: Require SSH public key for EC2 key pair
-      ansible.builtin.assert:
-        that:
-          - ssh_public_key is defined
-          - (ssh_public_key | string | trim | length) > 0
-        fail_msg: >-
-          Set ssh_public_key (AAP survey for Job Template, or -e ssh_public_key="ssh-ed25519 AAAA...").
-          Public key only; never commit private keys.
+    - name: Terraform destroy (same module, path, and variables as apply)
+      when: cleanup_after_test
+      block:
+        - name: Require SSH public key for EC2 key pair
+          ansible.builtin.assert:
+            that:
+              - ssh_public_key is defined
+              - (ssh_public_key | string | trim | length) > 0
+            fail_msg: >-
+              Set ssh_public_key (AAP survey for Job Template, or -e ssh_public_key="ssh-ed25519 AAAA...").
+              Public key only; never commit private keys.
 
-    - name: Verify Terraform CLI exists in execution environment
-      ansible.builtin.stat:
-        path: "{{ tf_terraform_binary }}"
-      register: tf_terraform_stat
+        - name: Verify Terraform CLI exists in execution environment
+          ansible.builtin.stat:
+            path: "{{ tf_terraform_binary }}"
+          register: tf_terraform_stat
 
-    - name: Fail if Terraform CLI is missing
-      ansible.builtin.fail:
-        msg: >-
-          Terraform CLI not found at {{ tf_terraform_binary }}.
-          The Job Template must use an execution environment that installs Terraform (e.g. build from
-          execution-environment/execution-environment.yml, push to your hub, and select that EE).
-      when: not tf_terraform_stat.stat.exists
+        - name: Fail if Terraform CLI is missing
+          ansible.builtin.fail:
+            msg: >-
+              Terraform CLI not found at {{ tf_terraform_binary }}.
+              The Job Template must use an execution environment that installs Terraform (e.g. build from
+              execution-environment/execution-environment.yml, push to your hub, and select that EE).
+          when: not tf_terraform_stat.stat.exists
 
-    - name: Destroy Terraform configuration (EC2, key pair, security group, and VPC if created)
-      cloud.terraform.terraform:
-        project_path: "{{ playbook_dir }}/../terraform"
-        binary_path: "{{ tf_terraform_binary }}"
-        state: absent
-        force_init: true
-        complex_vars: true
-        variables:
-          region: "{{ tf_region }}"
-          instance_type: "{{ tf_instance_type }}"
-          name_prefix: "{{ tf_name_prefix }}"
-          web_demo_ssh_pubkey: "{{ ssh_public_key }}"
-          create_vpc: "{{ tf_create_vpc }}"
-          existing_vpc_id: "{{ tf_existing_vpc_id }}"
-          existing_subnet_id: "{{ tf_existing_subnet_id }}"
-          vpc_cidr: "{{ tf_vpc_cidr }}"
-          public_subnet_cidr: "{{ tf_public_subnet_cidr }}"
+        - name: Expose apply result as tf_result for destroy visibility (same as Play 1 register)
+          ansible.builtin.set_fact:
+            tf_result: "{{ tf_apply }}"
+          when: tf_apply is defined
+
+        - name: Show what Terraform will destroy (same state/vars as apply)
+          ansible.builtin.debug:
+            msg:
+              - "Destroying infrastructure created earlier"
+              - "Instance IDs: {{ tf_result.outputs.instance_ids.value }}"
+              - "Public IPs: {{ tf_result.outputs.public_ips.value }}"
+          when: tf_apply is defined
+
+        - name: Destroy Terraform configuration (EC2, key pair, security group, and VPC if created)
+          cloud.terraform.terraform:
+            project_path: "{{ playbook_dir }}/../terraform"
+            binary_path: "{{ tf_terraform_binary }}"
+            state: absent
+            force_init: true
+            complex_vars: true
+            variables:
+              region: "{{ tf_region }}"
+              instance_type: "{{ tf_instance_type }}"
+              name_prefix: "{{ tf_name_prefix }}"
+              web_demo_ssh_pubkey: "{{ ssh_public_key }}"
+              create_vpc: "{{ tf_create_vpc }}"
+              existing_vpc_id: "{{ tf_existing_vpc_id }}"
+              existing_subnet_id: "{{ tf_existing_subnet_id }}"
+              vpc_cidr: "{{ tf_vpc_cidr }}"
+              public_subnet_cidr: "{{ tf_public_subnet_cidr }}"
+
+        - name: Confirm Terraform destroy finished
+          ansible.builtin.debug:
+            msg: "Terraform destroy completed successfully"

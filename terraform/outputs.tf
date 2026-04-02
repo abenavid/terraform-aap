@@ -18,6 +18,11 @@ output "instance_names" {
   value       = [aws_instance.app.tags["Name"]]
 }
 
+output "instance_key_name" {
+  description = "EC2 key pair name on the instance (must match the private key in your AAP Machine credential)."
+  value       = aws_key_pair.web_key.key_name
+}
+
 output "vpc_id" {
   description = "VPC used for the instance and security group (created or existing)."
   value       = local.vpc_id

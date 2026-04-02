@@ -8,9 +8,13 @@ This repository separates **infrastructure** (`terraform/`), **orchestration and
 
 **AAP runs a single Job Template** that executes **`ansible/tf_ops.yml`**. Nothing else is required for the happy path: no workflow of multiple jobs, no static inventory of EC2 IPs, no manual copy-paste from `terraform output`.
 
-1. **Play 1 (`hosts: localhost`)** runs Terraform apply via the `cloud.terraform.terraform` module. Terraform creates the EC2 instance (and related AWS objects). The playbook registers the module result and reads **Terraform outputs** (`public_ips`, `private_ips`, `instance_ids`, `instance_names`). It then calls **`ansible.builtin.add_host`** to put those hosts into an in-memory group **`tf_group_web_demo`** with `ansible_host` set to each public IP.
+1. **Play 1 (`hosts: localhost`)** runs Terraform apply via the `cloud.terraform.terraform` module. Terraform creates the EC2 instance (and related AWS objects). The playbook registers the module result and reads **Terraform outputs** (`public_ips`, `private_ips`, `instance_ids`, `instance_names`, `instance_key_name`). A **debug** task prints names, IPs, and the EC2 **`instance_key_name`** so you can verify it matches your AAP Machine credential. It then calls **`ansible.builtin.add_host`** to put those hosts into an in-memory group **`tf_group_web_demo`** with **`ansible_host`** set to each public IP and **`ansible_user: ec2-user`**.
 
 2. **Play 2 (`hosts: tf_group_web_demo`)** runs immediately in the **same playbook run**. It installs and configures the web stack (httpd, firewalld, templated `index.html`) on the instances Ansible just learned about.
+
+3. **Play 3** (optional) pauses for manual checks before teardown when **`cleanup_after_test`** is **`true`**.
+
+4. **Play 4** (optional) runs **`cloud.terraform.terraform`** with **`state: absent`** using the **same** `project_path`, **`force_init`**, **`complex_vars`**, and **variable map** as Play 1, so destroy matches apply. It prints instance IDs and public IPs from the apply result, then destroys. There are **no** tasks after destroy that target **`tf_group_web_demo`** (no SSH, validation, or fact gathering on those hosts).
 
 ### Why this works
 
@@ -31,7 +35,15 @@ The Terraform AWS provider is configured **without** `aws_access_key_id` / `aws_
 
 ### Why the SSH **public** key comes from an AAP survey
 
-The EC2 key pair is created from **public** key material. AAP can collect that with a **survey variable** (e.g. `ssh_public_key`), which the playbook passes to Terraform as `web_demo_ssh_pubkey`. That avoids `lookup('file')`, committed keys, or hardcoded `~/.ssh` paths. The matching **private** key for SSH access is supplied separately (machine credential, AAP credential, or local agent)—never stored in this repo.
+The EC2 key pair is created from **public** key material. AAP can collect that with a **survey variable** (e.g. `ssh_public_key`), which the playbook passes to Terraform as **`web_demo_ssh_pubkey`**. That avoids `lookup('file')`, committed keys, or hardcoded `~/.ssh` paths.
+
+**Play 2 SSH will fail** (`Permission denied (publickey,...)`) unless the **private** key side is correct:
+
+- The **Job Template must attach a Machine credential** (SSH) in addition to the AWS cloud credential and survey.
+- That **Machine credential must hold the private key** that matches the **same** public key you passed in the survey (the key pair Terraform registers on the EC2 instance).
+- This playbook does **not** set `ansible_ssh_private_key_file`; AAP injects the key from the Machine credential. If the credential is missing, wrong, or does not match the surveyed public key, authentication fails even when Ansible can reach the host.
+
+Never store private keys in this repo.
 
 ### Terraform state in AAP job pods
 
@@ -106,19 +118,36 @@ ansible-playbook ansible/tf_ops.yml \
   -e 'tf_existing_subnet_id=subnet-xxxxxxxx'
 ```
 
-### Destroy (Play 4 in `tf_ops.yml`)
+### Cleanup and destroy (`cleanup_after_test`)
 
-Use the **same** networking mode as your last apply (same existing IDs, or empty IDs with auto-created VPC, or `tf_create_vpc: true`).
+Default in **`ansible/vars/main.yml`**: **`cleanup_after_test: true`**. That runs the full **create → verify (pause) → destroy** flow in one playbook run—like a clean unit test.
+
+- **`cleanup_after_test: true`** (or `-e cleanup_after_test=true`): Play 3 pause runs, then Play 4 runs Terraform destroy with the **same** inputs as apply.
+- **`cleanup_after_test: false`** (or `-e cleanup_after_test=false`): Skips the pause and **skips** destroy; AWS resources stay up after Play 2. Use this when you want to keep the environment for follow-up work.
+
+**Terraform destroy only removes resources that exist in Terraform state** for this run’s workspace (`terraform.tfstate` beside the code, unless you use a remote backend). It does not delete arbitrary resources in your account—only what this configuration tracked.
+
+**Apply and destroy in the same job** matters when using **local state**: each AAP job pod often has an **ephemeral filesystem**, so a later job may not see the same `terraform.tfstate`. Running apply and destroy in **one** playbook execution keeps state consistent so destroy targets what apply just created.
+
+**AAP jobs are ephemeral**: the automation process ends when the job finishes; there is no long-lived “session.” The in-memory inventory from **`add_host`** exists only for that run—after destroy, nothing in this playbook tries to use **`tf_group_web_demo`** again.
+
+**Destroy output** often lists **many** resources (instances, security groups, routes, optional VPC pieces, key pair, etc.). That is **expected**: Terraform walks the dependency graph and removes tracked objects. **If the log shows resources being destroyed and completes without error, the teardown path is behaving correctly.**
+
+### Destroy only (Play 4) or CLI
+
+For a **standalone** destroy (same networking inputs as apply):
 
 ```bash
 ansible-playbook ansible/tf_ops.yml \
-  --start-at-task "Destroy Terraform configuration (EC2, key pair, security group, and VPC if created)" \
+  --start-at-task "Terraform destroy (same module, path, and variables as apply)" \
   -e 'ssh_public_key="ssh-ed25519 AAAA... your-comment"' \
   -e 'tf_existing_vpc_id=vpc-xxxxxxxx' \
   -e 'tf_existing_subnet_id=subnet-xxxxxxxx'
 ```
 
-Alternatively run Terraform destroy from `terraform/` with the same `terraform.tfvars` or `-var` flags.
+Use the **same** networking mode as the apply that created the stack (same existing IDs, or empty IDs with auto-created VPC, or `tf_create_vpc: true`). Starting at the **block** task name runs the assert, pre-destroy debug (if `tf_apply` exists from an earlier play in the same run—usually run the full playbook), Terraform destroy, and success message.
+
+Alternatively run **`terraform destroy`** from **`terraform/`** with the same **`terraform.tfvars`** or **`-var`** flags.
 
 ### Terraform CLI only (optional)
 
@@ -136,9 +165,17 @@ Use `terraform/terraform.tfvars.example` as a template. Never commit secrets or 
 
 - **Execution environment:** Include **Terraform CLI 1.5+** and collections from `collections/requirements.yml` (see `execution-environment/`).
 - **Job Template:** Single playbook **`ansible/tf_ops.yml`**, project root = repo root (or adjust `project_path` in the playbook if your layout differs).
-- **Survey / extra vars:** `ssh_public_key` (public key string); add **`tf_existing_vpc_id`** and **`tf_existing_subnet_id`** for the preferred path, or leave them empty for **auto VPC creation**. Set **`tf_create_vpc: true`** to force creating a new VPC.
-- **Credential:** AWS credential type that injects environment variables **or** a role the job pod can assume.
-- **SSH to EC2:** Machine credential (or equivalent) whose private key matches the surveyed public key.
+- **Survey / extra vars:** `ssh_public_key` (SSH **public** key string); Terraform receives it as **`web_demo_ssh_pubkey`** and creates the EC2 key pair from it. Add **`tf_existing_vpc_id`** and **`tf_existing_subnet_id`** for the preferred path, or leave them empty for **auto VPC creation**. Set **`tf_create_vpc: true`** to force creating a new VPC. Optional **`cleanup_after_test`** (default **`true`**) controls whether Play 3–4 run (pause + Terraform destroy); set **`false`** to leave infrastructure running after Play 2.
+- **AWS credential:** Type that injects environment variables **or** a role the job pod can assume (for Terraform).
+- **Machine credential (required for Play 2):** Attach an SSH **Machine** credential whose **private key** is the pair of the survey **`ssh_public_key`**. The EC2 instance is launched with that key name/material; **without** a matching Machine credential, Play 2 fails SSH auth. After apply, Play 1 prints **`instance_key_name`** in a debug step—use it to confirm which AWS key pair the instance uses; it must align with your credential.
+
+### SSH auth checklist
+
+| Piece | Role |
+|-------|------|
+| Survey `ssh_public_key` | Public half; Terraform **`aws_key_pair`** + instance **`key_name`** |
+| AAP Machine credential | Private half; must match the same key pair |
+| Playbook | Sets **`ansible_host`** to the instance public IP and **`ansible_user: ec2-user`**; does not set a playbook-level private key path |
 
 ---
 
@@ -147,6 +184,6 @@ Use `terraform/terraform.tfvars.example` as a template. Never commit secrets or 
 | Step | Command |
 |------|---------|
 | Install collections | `ansible-galaxy collection install -r collections/requirements.yml` |
-| Apply + configure | `ansible-playbook ansible/tf_ops.yml -e 'ssh_public_key="..."' -e tf_existing_vpc_id=... -e tf_existing_subnet_id=...` |
-| Destroy stack | Start at destroy task in `tf_ops.yml` or `cd terraform && terraform destroy` |
+| Apply + configure + optional cleanup | `ansible-playbook ansible/tf_ops.yml -e 'ssh_public_key="..."'` (default: pause + destroy; add `-e cleanup_after_test=false` to leave infra up) |
+| Destroy stack | Same playbook with `cleanup_after_test: true`, or `--start-at-task "Terraform destroy (same module, path, and variables as apply)"`, or `cd terraform && terraform destroy` |
 | Terraform only | `cd terraform && terraform init && terraform apply` |

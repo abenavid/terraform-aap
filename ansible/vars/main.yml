@@ -16,5 +16,9 @@ tf_public_subnet_cidr: "10.0.1.0/24"
 tf_terraform_binary: /usr/bin/terraform
 # ssh_public_key must be supplied at runtime (AAP survey or -e), not committed.
 
+# When true (default): pause + Terraform destroy after Play 2 (create → verify → destroy).
+# When false: skip pause and destroy; leave AWS resources running (same apply/configure as usual).
+cleanup_after_test: true
+
 # Jinja template for index.html
 web_page_title: "Terraform + Ansible + AAP"
