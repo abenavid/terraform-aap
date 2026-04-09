@@ -1,0 +1,5 @@
+---
+controller_execution_environments:
+  - name: EE AWS Terraform
+    image: aap-aap.apps.cluster-wf7cj-1.dynamic.redhatworkshops.io/ansible/ee-aws-terraform-rhel9:latest
+    pull: always

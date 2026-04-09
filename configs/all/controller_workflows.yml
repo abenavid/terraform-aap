@@ -1,0 +1,33 @@
+---
+controller_workflows:
+  - name: TF + Ansible EC2
+    survey_enabled: true
+    workflow_nodes:
+
+      # Step 1: Sync the Project Repository
+      - identifier: sync_project
+        unified_job_template: AAP + Terraform
+        success_nodes:
+          - terraform_create
+
+      # Step 2: Provision EC2 instance via Terraform
+      - identifier: terraform_create
+        unified_job_template: Terraform Create EC2
+        success_nodes:
+          - ansible_configure
+
+      # Step 3: Configure the EC2 instance via Ansible
+      - identifier: ansible_configure
+        unified_job_template: Ansible Configure EC2
+        success_nodes:
+          - pause_for_verification
+
+      # Step 4: Pause for manual verification
+      - identifier: pause_for_verification
+        unified_job_template: Pause For Verification
+        success_nodes:
+          - destroy_services
+
+      # Step 5: Tear down the infrastructure
+      - identifier: destroy_services
+        unified_job_template: Destroy Previously Created Services

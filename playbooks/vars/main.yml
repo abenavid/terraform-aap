@@ -1,0 +1,27 @@
+---
+# Non-secret defaults for Terraform (tf_ops.yml) and Play 2 (web config).
+
+tf_region: us-east-1
+tf_instance_type: t2.micro
+tf_name_prefix: tf-demo
+# Networking: preferred path is existing VPC
+# + subnet (many accounts have no default VPC).
+tf_create_vpc: false
+tf_existing_vpc_id: ""
+tf_existing_subnet_id: ""
+tf_vpc_cidr: "10.0.0.0/16"
+tf_public_subnet_cidr: "10.0.1.0/24"
+# Path to terraform binary (
+# Hashicorp RPM on RHEL EE: /usr/bin/terraform). Override locally if needed
+tf_terraform_binary: /usr/bin/terraform
+# ssh_public_key must be supplied at runtime
+# (AAP survey or -e), not committed.
+
+# When true (default): pause +
+# Terraform destroy after Play 2 (create → verify → destroy).
+# When false: skip pause and destroy;
+# leave AWS resources running (same apply/configure as usual).
+cleanup_after_test: true
+
+# Jinja template for index.html
+web_page_title: "Demo: Terraform + Ansible + AAP"
