@@ -1,4 +1,3 @@
-# yamllint disable rule:line-length
 ---
 # Build from the repository root (default context: ./context).
 # Pin linux/amd64 so AAP workers do not hit "Exec format error" on
