@@ -1,0 +1,15 @@
+---
+repos:
+  - repo: https://github.com/adrienverge/yamllint.git
+    rev: v1.33.0
+    hooks:
+      - id: yamllint
+
+  # Use the local environment instead of building a broken Python 3.13 sandbox
+  - repo: local
+    hooks:
+      - id: ansible-lint
+        name: ansible-lint
+        entry: ansible-lint --profile production
+        language: system
+        files: \.(yaml|yml)$

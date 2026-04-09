@@ -62,11 +62,11 @@ By default this project uses a **local** Terraform backend (`terraform.tfstate` 
 
 This module supports **two modes**:
 
-1. **Reuse existing VPC and subnet (recommended for demos)**  
+1. **Reuse existing VPC and subnet (recommended for demos)**
    Set **`existing_vpc_id`** and **`existing_subnet_id`** (Terraform) or Ansible extra vars **`tf_existing_vpc_id`** and **`tf_existing_subnet_id`**. Leave **`create_vpc`** at **`false`** (default). The subnet should map public IPs if you need SSH/HTTP from the internet.
 
-2. **Create a new VPC (fallback or explicit)**  
-   - **Auto-fallback:** If **`create_vpc`** is **`false`** and **both** existing ID variables are **empty**, Terraform **creates** a VPC, public subnet, internet gateway, and routes automatically. That way a minimal AAP job (SSH key only) still works.  
+2. **Create a new VPC (fallback or explicit)**
+   - **Auto-fallback:** If **`create_vpc`** is **`false`** and **both** existing ID variables are **empty**, Terraform **creates** a VPC, public subnet, internet gateway, and routes automatically. That way a minimal AAP job (SSH key only) still works.
    - **Explicit:** Set **`create_vpc`** to **`true`** to always create a new VPC stack (for example when you want isolation regardless of survey inputs).
 
 You must **never** pass only one of **`existing_vpc_id`** / **`existing_subnet_id`**; Terraform validates that the pair is complete or both empty.
@@ -100,6 +100,15 @@ The subnet you choose (or the one created) must allow what you need for the demo
 ```bash
 ansible-galaxy collection install -r collections/requirements.yml
 ```
+
+Before committing, install the pre-commit hooks to ensure code quality:
+
+```bash
+pip install pre-commit ansible-lint yamllint
+pre-commit install
+```
+
+---
 
 ### One playbook: Terraform + configure (from repo root)
 
