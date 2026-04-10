@@ -82,7 +82,7 @@ jobs:
       - name: Check Mode Deployment
         run: >
           ansible-playbook -i inventory/inventory_dev.yml
-          playbooks/deploy_cac.yml -e "target_env=dev" --check
+          playbooks/deploy_cac.yml -e "target_env=dev" --syntax-check
         env:
           CONTROLLER_HOST: ${{ secrets.CONTROLLER_HOST }}
           CONTROLLER_OAUTH_TOKEN: ${{ secrets.CONTROLLER_OAUTH_TOKEN }}

@@ -25,68 +25,9 @@
       when: item.stat.exists and item.stat.isdir
 
     # -------------------------------------------------------------------------
-    # DEPLOY PHASE (Bottom-Up / Dependency Order)
+    # DEPLOY PHASE (The Dispatch Architecture)
     # -------------------------------------------------------------------------
 
-    - name: "Deploy: Organizations"
-      ansible.controller.organization:
-        name: "{{ item.name }}"
-        description: "{{ item.description | default(omit) }}"
-        state: present
-      loop: "{{ controller_organizations | default([]) }}"
-
-    - name: "Deploy: Execution Environments"
-      ansible.controller.execution_environment:
-        name: "{{ item.name }}"
-        image: "{{ item.image }}"
-        pull: "{{ item.pull | default(omit) }}"
-        organization: "{{ item.organization | default(omit) }}"
-        state: present
-      loop: "{{ controller_execution_environments | default([]) }}"
-
-    - name: "Deploy: Projects"
-      ansible.controller.project:
-        name: "{{ item.name }}"
-        organization: "{{ item.organization | default(omit) }}"
-        scm_type: "{{ item.scm_type | default('git') }}"
-        scm_url: "{{ item.scm_url }}"
-        scm_branch: "{{ item.scm_branch | default(omit) }}"
-        wait: true
-        state: present
-      loop: "{{ controller_projects | default([]) }}"
-
-    - name: "Deploy: Inventories"
-      ansible.controller.inventory:
-        name: "{{ item.name }}"
-        organization: "{{ item.organization | default(omit) }}"
-        state: present
-      loop: "{{ controller_inventories | default([]) }}"
-
-    - name: "Deploy: Job Templates"
-      ansible.controller.job_template:
-        name: "{{ item.name }}"
-        project: "{{ item.project }}"
-        playbook: "{{ item.playbook }}"
-        inventory: "{{ item.inventory | default(omit) }}"
-        execution_environment: "{{ item.execution_environment | default(omit) }}"
-        state: present
-      loop: "{{ controller_job_templates | default([]) }}"
-
-    - name: "Deploy: Workflow Job Templates (Base Shell)"
-      ansible.controller.workflow_job_template:
-        name: "{{ item.name }}"
-        organization: "{{ item.organization | default(omit) }}"
-        survey_enabled: "{{ item.survey_enabled | default(omit) }}"
-        state: present
-      loop: "{{ controller_workflows | default([]) }}"
-
-    - name: "Deploy: Workflow Job Template Nodes (The Drag-and-Drop Steps)"
-      ansible.controller.workflow_job_template_node:
-        workflow_job_template: "{{ item.0.name }}"
-        identifier: "{{ item.1.identifier }}"
-        unified_job_template: "{{ item.1.unified_job_template | default(omit) }}"
-        success_nodes: "{{ item.1.success_nodes | default(omit) }}"
-        failure_nodes: "{{ item.1.failure_nodes | default(omit) }}"
-        always_nodes: "{{ item.1.always_nodes | default(omit) }}"
-        state: present
-      loop: "{{ controller_workflows | default([]) | subelements('workflow_nodes', skip_missing=True) }}"
+    - name: Apply Configuration as Code State via Dispatch
+      ansible.builtin.include_role:
+        name: infra.aap_configuration.dispatch
