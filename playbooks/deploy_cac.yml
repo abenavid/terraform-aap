@@ -7,11 +7,22 @@
     env: "{{ target_env | default('dev') }}"
 
   tasks:
+    # -------------------------------------------------------------------------
+    # PRE-FLIGHT / VARIABLE LOADING
+    # -------------------------------------------------------------------------
+
+    - name: Check if configuration directories exist
+      ansible.builtin.stat:
+        path: "../configs/{{ item }}"
+      register: config_dirs
+      loop: ['all', "{{ env }}"]
+
     - name: Load All Configuration Variables
       ansible.builtin.include_vars:
-        dir: "../configs/{{ item }}"
+        dir: "../configs/{{ item.item }}"
         extensions: ['yml', 'yaml']
-      loop: ['all', "{{ env }}"]
+      loop: "{{ config_dirs.results }}"
+      when: item.stat.exists and item.stat.isdir
 
     # -------------------------------------------------------------------------
     # DEPLOY PHASE (Bottom-Up / Dependency Order)
@@ -78,5 +89,4 @@
         failure_nodes: "{{ item.1.failure_nodes | default(omit) }}"
         always_nodes: "{{ item.1.always_nodes | default(omit) }}"
         state: present
-      # subelements loops over the inner 'workflow_nodes' list inside each 'controller_workflows' dictionary
       loop: "{{ controller_workflows | default([]) | subelements('workflow_nodes', skip_missing=True) }}"

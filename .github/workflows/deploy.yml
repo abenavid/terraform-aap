@@ -4,9 +4,7 @@ name: Terraform/AAP Pipeline
 "on":
   push:
     branches:
-      - cac
-      - main
-      - development
+      - '**'
   pull_request:
     branches:
       - main
