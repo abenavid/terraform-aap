@@ -1,5 +1,4 @@
 ---
-
 - name: "Play 1: Apply Terraform and build in-memory inventory"
   hosts: localhost
   connection: local
@@ -196,4 +195,5 @@
 
         - name: Confirm Terraform destroy finished
           ansible.builtin.debug:
+
             msg: "Terraform destroy completed successfully"

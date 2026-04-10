@@ -1,0 +1,7 @@
+---
+all:
+  children:
+    dev:
+      hosts:
+        aap-controller:
+          ansible_connection: local

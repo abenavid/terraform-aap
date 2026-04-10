@@ -1,0 +1,136 @@
+---
+name: Terraform/AAP Pipeline
+
+"on":
+  push:
+    branches:
+      - '**'
+  pull_request:
+    branches:
+      - main
+      - development
+
+jobs:
+  # 1. Linting & Code Quality (Using standard public image)
+  lint:
+    name: Linting & Code Quality
+    runs-on: ubuntu-latest
+    container:
+      image: quay.io/ansible/creator-ee:latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install Ansible Galaxy Collections
+        env:
+          ANSIBLE_GALAXY_SERVER_LIST: "automation_hub, galaxy"
+          # Red Hat Automation Hub config
+          ANSIBLE_GALAXY_SERVER_AUTOMATION_HUB_URL: >-
+            https://console.redhat.com/api/automation-hub/content/published/
+          ANSIBLE_GALAXY_SERVER_AUTOMATION_HUB_AUTH_URL: >-
+            https://sso.redhat.com/auth/realms/redhat-external/protocol/openid-connect/token
+          ANSIBLE_GALAXY_SERVER_AUTOMATION_HUB_TOKEN: ${{ secrets.AH_TOKEN }}
+          # The missing community Galaxy config
+          ANSIBLE_GALAXY_SERVER_GALAXY_URL: "https://galaxy.ansible.com/"
+        run: >
+          ansible-galaxy collection install
+          -r requirements.yml
+
+      - name: Run yamllint
+        run: yamllint configs/
+
+      - name: Run ansible-lint
+        run: ansible-lint playbooks
+
+  # 3. Dry-Run API Simulation (Check Mode)
+  dry_run_validation:
+    name: Dry-Run API Simulation
+    needs: [lint]
+    runs-on: ubuntu-latest
+    environment:
+      name: Test
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # Bootstrap standard Ubuntu runner
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Ansible and dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ansible requests
+
+      - name: Install Ansible Galaxy Collections
+        env:
+          ANSIBLE_GALAXY_SERVER_LIST: "automation_hub, galaxy"
+          # Red Hat Automation Hub config
+          ANSIBLE_GALAXY_SERVER_AUTOMATION_HUB_URL: >-
+            https://console.redhat.com/api/automation-hub/content/published/
+          ANSIBLE_GALAXY_SERVER_AUTOMATION_HUB_AUTH_URL: >-
+            https://sso.redhat.com/auth/realms/redhat-external/protocol/openid-connect/token
+          ANSIBLE_GALAXY_SERVER_AUTOMATION_HUB_TOKEN: ${{ secrets.AH_TOKEN }}
+          # The missing community Galaxy config
+          ANSIBLE_GALAXY_SERVER_GALAXY_URL: "https://galaxy.ansible.com/"
+        run: >
+          ansible-galaxy collection install
+          -r requirements.yml
+
+      - name: Check Mode Deployment
+        run: >
+          ansible-playbook -i inventory/inventory_dev.yml
+          playbooks/deploy_cac.yml -e "target_env=dev" --syntax-check
+        env:
+          CONTROLLER_HOST: ${{ secrets.CONTROLLER_HOST }}
+          CONTROLLER_OAUTH_TOKEN: ${{ secrets.CONTROLLER_OAUTH_TOKEN }}
+          CONTROLLER_VERIFY_SSL: ${{ secrets.CONTROLLER_VERIFY_SSL }}
+
+  # 4. Declarative Deployment - DEV (Auto on Merge)
+  deploy_development:
+    name: Declarative Deployment - DEV
+    needs: dry_run_validation
+    if: github.ref == 'refs/heads/development' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment:
+      name: Test
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # Bootstrap standard Ubuntu runner
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Ansible and dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ansible requests
+
+      - name: Install Ansible Galaxy Collections
+        env:
+          ANSIBLE_GALAXY_SERVER_LIST: "automation_hub, galaxy"
+          # Red Hat Automation Hub config
+          ANSIBLE_GALAXY_SERVER_AUTOMATION_HUB_URL: >-
+            https://console.redhat.com/api/automation-hub/content/published/
+          ANSIBLE_GALAXY_SERVER_AUTOMATION_HUB_AUTH_URL: >-
+            https://sso.redhat.com/auth/realms/redhat-external/protocol/openid-connect/token
+          ANSIBLE_GALAXY_SERVER_AUTOMATION_HUB_TOKEN: ${{ secrets.AH_TOKEN }}
+          # The missing community Galaxy config
+          ANSIBLE_GALAXY_SERVER_GALAXY_URL: "https://galaxy.ansible.com/"
+        run: >
+          ansible-galaxy collection install
+          -r requirements.yml
+
+      - name: Deploy to DEV
+        run: >
+          ansible-playbook -i inventory/inventory_dev.yml
+          playbooks/deploy_cac.yml -e "target_env=dev"
+        env:
+          CONTROLLER_HOST: ${{ secrets.CONTROLLER_HOST }}
+          CONTROLLER_OAUTH_TOKEN: ${{ secrets.CONTROLLER_OAUTH_TOKEN }}
+          CONTROLLER_VERIFY_SSL: ${{ secrets.CONTROLLER_VERIFY_SSL }}

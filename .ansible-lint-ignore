@@ -1,0 +1,4 @@
+# Ignore missing 'name' parameters in deeply nested dispatch variable lists
+configs/all/*.yml var-naming[no-role-prefix]
+configs/dev/*.yml var-naming[no-role-prefix]
+configs/prod/*.yml var-naming[no-role-prefix]

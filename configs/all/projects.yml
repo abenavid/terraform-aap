@@ -1,0 +1,6 @@
+---
+controller_projects:
+  - name: "terraform-aap"
+    organization: "Default"
+    scm_type: "git"
+    scm_url: "https://github.com/abenavid/terraform-aap.git"
