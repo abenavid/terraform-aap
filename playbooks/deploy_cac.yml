@@ -7,27 +7,53 @@
     env: "{{ target_env | default('dev') }}"
 
   tasks:
-    # -------------------------------------------------------------------------
-    # PRE-FLIGHT / VARIABLE LOADING
-    # -------------------------------------------------------------------------
-
-    - name: Check if configuration directories exist
-      ansible.builtin.stat:
-        path: "../configs/{{ item }}"
-      register: config_dirs
-      loop: ['all', "{{ env }}"]
-
     - name: Load All Configuration Variables
       ansible.builtin.include_vars:
-        dir: "../configs/{{ item.item }}"
+        dir: "../configs/{{ item }}"
         extensions: ['yml', 'yaml']
-      loop: "{{ config_dirs.results }}"
-      when: item.stat.exists and item.stat.isdir
+      loop: ['all', "{{ env }}"]
 
     # -------------------------------------------------------------------------
-    # DEPLOY PHASE (The Dispatch Architecture)
+    # DEPLOY PHASE (Bottom-Up / Dependency Order)
     # -------------------------------------------------------------------------
 
-    - name: Apply Configuration as Code State via Dispatch
-      ansible.builtin.include_role:
-        name: infra.aap_configuration.dispatch
+    - name: "Deploy: Organizations"
+      ansible.controller.organization:
+        name: "{{ item.name }}"
+        description: "{{ item.description | default(omit) }}"
+        state: present
+      loop: "{{ controller_organizations | default([]) }}"
+
+    - name: "Deploy: Projects"
+      ansible.controller.project:
+        name: "{{ item.name }}"
+        organization: "{{ item.organization }}"
+        scm_type: "{{ item.scm_type | default('git') }}"
+        scm_url: "{{ item.scm_url }}"
+        scm_branch: "{{ item.scm_branch | default(omit) }}"
+        wait: true
+        state: present
+      loop: "{{ controller_projects | default([]) }}"
+
+    - name: "Deploy: Inventories"
+      ansible.controller.inventory:
+        name: "{{ item.name }}"
+        organization: "{{ item.organization }}"
+        state: present
+      loop: "{{ controller_inventories | default([]) }}"
+
+    - name: "Deploy: Job Templates"
+      ansible.controller.job_template:
+        name: "{{ item.name }}"
+        project: "{{ item.project }}"
+        playbook: "{{ item.playbook }}"
+        inventory: "{{ item.inventory }}"
+        state: present
+      loop: "{{ controller_job_templates | default([]) }}"
+
+    - name: "Deploy: Workflow Job Templates"
+      ansible.controller.workflow_job_template:
+        name: "{{ item.name }}"
+        organization: "{{ item.organization }}"
+        state: present
+      loop: "{{ controller_workflow_job_templates | default([]) }}"

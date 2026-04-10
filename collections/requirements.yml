@@ -6,7 +6,7 @@ collections:
   - name: infra.aap_utilities
   # Explicitly pin the Red Hat certified collections
   - name: ansible.controller
-    version: ">=4.6.0"      # Use >=4.7.0 if you are on AAP 2.6+
+    version: ">=4.7.0"      # Use >=4.7.0 if you are on AAP 2.6+
   - name: ansible.platform
     version: ">=2.5.0"      # Use >=2.6.0 if you are on AAP 2.6+
   - name: ansible.eda
