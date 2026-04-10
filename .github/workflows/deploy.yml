@@ -34,7 +34,7 @@ jobs:
           ANSIBLE_GALAXY_SERVER_GALAXY_URL: "https://galaxy.ansible.com/"
         run: >
           ansible-galaxy collection install
-          -r execution-environment/requirements.yml
+          -r playbooks/collections/requirements.yml
 
       - name: Run yamllint
         run: yamllint configs/
@@ -77,7 +77,7 @@ jobs:
           ANSIBLE_GALAXY_SERVER_GALAXY_URL: "https://galaxy.ansible.com/"
         run: >
           ansible-galaxy collection install
-          -r execution-environment/requirements.yml
+          -r playbooks/collections/requirements.yml
 
       - name: Check Mode Deployment
         run: >
@@ -124,7 +124,7 @@ jobs:
           ANSIBLE_GALAXY_SERVER_GALAXY_URL: "https://galaxy.ansible.com/"
         run: >
           ansible-galaxy collection install
-          -r execution-environment/requirements.yml
+          -r playbooks/collections/requirements.yml
 
       - name: Deploy to DEV
         run: >
