@@ -1,14 +1,15 @@
 ---
-- name: Terraform Create EC2
-  job_type: run
-  organization: Default
-  inventory: Demo Inventory
-  project: AAP + Terraform
-  playbook: playbooks/tf_ops.yml
-  execution_environment: EE AWS Terraform
-  credentials:
-    - AWS
-    - env Credential
-    - SSH Private Key TF Demo
-  survey_enabled: true
-  verbosity: 1
+controller_job_templates:
+  - name: Terraform Create EC2
+    job_type: run
+    organization: Default
+    inventory: Demo Inventory
+    project: AAP + Terraform
+    playbook: playbooks/tf_ops.yml
+    execution_environment: EE AWS Terraform
+    credentials:
+      - AWS
+      - env Credential
+      - SSH Private Key TF Demo
+    survey_enabled: true
+    verbosity: 1
